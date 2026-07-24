@@ -1,68 +1,58 @@
-"""
-Camada de banco de dados.
-Usa SQLite por padrão (arquivo local, zero configuração).
-Se no futuro quiser plugar no SQL Server do fleet monitoring,
-basta trocar a DATABASE_URL abaixo por uma connection string
-do SQL Server (ex: usando pyodbc/mssql+pyodbc://...).
-"""
-import os
-from datetime import datetime
-from sqlalchemy import (
-    create_engine, Column, Integer, String, Float, Boolean,
-    DateTime, ForeignKey
-)
-from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+import sqlite3
+from passlib.context import CryptContext
 
-from .paths import data_dir
+DB_PATH = "ping_monitor.db"
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-DB_PATH = os.path.join(data_dir(), "ping_tool.db")
-DATABASE_URL = f"sqlite:///{DB_PATH}"
-
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-
-class Asset(Base):
-    __tablename__ = "assets"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(120), nullable=False)
-    ip = Column(String(45), nullable=False, unique=True, index=True)
-    group = Column(String(80), default="Geral")  # ex: frota, escritório, torre
-    active = Column(Boolean, default=True)
-
-    # Estado calculado em memória / cache do último resultado
-    last_status = Column(Boolean, nullable=True)   # True=online, False=offline, None=desconhecido
-    last_rtt_ms = Column(Float, nullable=True)
-    last_checked = Column(DateTime, nullable=True)
-    consecutive_failures = Column(Integer, default=0)
-
-    history = relationship(
-        "PingResult", back_populates="asset", cascade="all, delete-orphan"
-    )
-
-
-class PingResult(Base):
-    __tablename__ = "ping_results"
-
-    id = Column(Integer, primary_key=True, index=True)
-    asset_id = Column(Integer, ForeignKey("assets.id"), nullable=False, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-    is_alive = Column(Boolean, nullable=False)
-    rtt_ms = Column(Float, nullable=True)
-    packet_loss = Column(Float, nullable=True)  # 0.0 a 1.0
-
-    asset = relationship("Asset", back_populates="history")
-
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Tabela de Usuários
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            hashed_password TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'viewer',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Tabela de Logs de Auditoria
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            action TEXT NOT NULL,
+            details TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Criar usuário Admin padrão se não existir (senha padrão: admin123)
+    cursor.execute("SELECT * FROM users WHERE username = 'admin'")
+    if not cursor.fetchone():
+        hashed_pw = pwd_context.hash("admin123")
+        cursor.execute(
+            "INSERT INTO users (username, hashed_password, role) VALUES (?, ?, ?)",
+            ("admin", hashed_pw, "admin")
+        )
+    
+    conn.commit()
+    conn.close()
 
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+def log_action(username: str, action: str, details: str = None):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO audit_logs (username, action, details) VALUES (?, ?, ?)",
+        (username, action, details)
+    )
+    conn.commit()
+    conn.close()
