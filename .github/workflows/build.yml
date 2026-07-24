@@ -1,0 +1,47 @@
+name: Build PingMonitor.exe
+
+# Roda automaticamente sempre que você enviar (push) código para o repositório,
+# e também pode ser disparado manualmente pela aba "Actions" no GitHub.
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest   # máquina Windows de verdade, na nuvem do GitHub
+
+    steps:
+      - name: Baixar o código do repositório
+        uses: actions/checkout@v4
+
+      - name: Preparar o Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Gerar o executável
+        run: >
+          pyinstaller --onefile --name PingMonitor
+          --add-data "app/static;app/static"
+          --hidden-import uvicorn.logging
+          --hidden-import uvicorn.loops
+          --hidden-import uvicorn.loops.auto
+          --hidden-import uvicorn.protocols
+          --hidden-import uvicorn.protocols.http
+          --hidden-import uvicorn.protocols.http.auto
+          --hidden-import uvicorn.protocols.websockets
+          --hidden-import uvicorn.protocols.websockets.auto
+          --hidden-import uvicorn.lifespan
+          --hidden-import uvicorn.lifespan.on
+          run.py
+
+      - name: Disponibilizar o .exe para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: PingMonitor-windows
+          path: dist/PingMonitor.exe
