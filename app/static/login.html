@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ping Monitor — Login</title>
+<style>
+  :root{
+    --cat-yellow: #FFCC11;
+    --cat-yellow-dim: #cfa30d;
+    --black: #0d0d0d;
+    --panel: #171717;
+    --line: #2b2b2b;
+    --text: #f2f2f0;
+    --muted: #9a9a94;
+    --danger: #e5484d;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--black); color:var(--text);
+    font-family:var(--font); display:flex; align-items:center; justify-content:center;
+    overflow:hidden; position:relative;
+  }
+  /* Faixa diagonal estilo sinalização industrial, ao fundo */
+  .stripes{
+    position:absolute; inset:-20% -20%; z-index:0; opacity:.05;
+    background:repeating-linear-gradient(135deg, var(--cat-yellow) 0 26px, transparent 26px 60px);
+    animation: driftStripes 26s linear infinite;
+  }
+  @keyframes driftStripes{
+    from{ transform:translate(0,0); }
+    to{ transform:translate(120px, 80px); }
+  }
+
+  .card{
+    position:relative; z-index:1;
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:42px 38px; width:100%; max-width:380px;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+    opacity:0; transform:translateY(18px);
+    animation: riseIn .5s cubic-bezier(.2,.8,.3,1) forwards .1s;
+  }
+  @keyframes riseIn{
+    to{ opacity:1; transform:translateY(0); }
+  }
+
+  .bar{ height:5px; width:56px; background:var(--cat-yellow); border-radius:3px; margin-bottom:22px; }
+  .eyebrow{
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--cat-yellow);
+    font-weight:700; margin-bottom:6px;
+  }
+  h1{ margin:0 0 26px; font-size:22px; font-weight:750; letter-spacing:-.01em; }
+
+  label{ display:block; font-size:12px; color:var(--muted); margin:16px 0 6px; }
+  input{
+    width:100%; background:#0f0f0f; border:1px solid var(--line); color:var(--text);
+    padding:11px 13px; border-radius:8px; font-size:14px; font-family:var(--font);
+    transition:.15s border-color;
+  }
+  input:focus{ outline:none; border-color:var(--cat-yellow); }
+
+  button{
+    width:100%; margin-top:26px; background:var(--cat-yellow); color:#161200;
+    border:none; padding:13px; border-radius:8px; font-size:14px; font-weight:750;
+    letter-spacing:.02em; cursor:pointer; transition:.15s filter, .1s transform;
+  }
+  button:hover{ filter:brightness(1.06); }
+  button:active{ transform:scale(.99); }
+  button:disabled{ opacity:.6; cursor:default; }
+
+  .error{
+    margin-top:14px; background:rgba(229,72,77,.12); border:1px solid var(--danger);
+    color:#ffb3b5; padding:9px 12px; border-radius:7px; font-size:12.5px;
+    display:none;
+  }
+  .error.show{ display:block; }
+
+  .footnote{ margin-top:24px; font-size:11px; color:var(--muted); text-align:center; }
+</style>
+</head>
+<body>
+
+<div class="stripes"></div>
+
+<div class="card">
+  <div class="bar"></div>
+  <div class="eyebrow">Rede Interna · Automação Mina</div>
+  <h1>Ping Monitor</h1>
+
+  <form id="loginForm">
+    <label>Usuário</label>
+    <input type="text" id="username" autocomplete="username" required>
+
+    <label>Senha</label>
+    <input type="password" id="password" autocomplete="current-password" required>
+
+    <div class="error" id="errorBox">Usuário ou senha inválidos.</div>
+
+    <button type="submit" id="submitBtn">Entrar</button>
+  </form>
+
+  <div class="footnote">Acesso restrito — uso interno Sotreq CAT</div>
+</div>
+
+<script>
+const form = document.getElementById('loginForm');
+const errorBox = document.getElementById('errorBox');
+const submitBtn = document.getElementById('submitBtn');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorBox.classList.remove('show');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Entrando...';
+
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        username: document.getElementById('username').value.trim(),
+        password: document.getElementById('password').value,
+      })
+    });
+
+    if (!res.ok) {
+      errorBox.classList.add('show');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Entrar';
+      return;
+    }
+
+    window.location.href = '/';
+  } catch (err) {
+    errorBox.textContent = 'Não foi possível conectar ao servidor.';
+    errorBox.classList.add('show');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Entrar';
+  }
+});
+</script>
+</body>
+</html>
