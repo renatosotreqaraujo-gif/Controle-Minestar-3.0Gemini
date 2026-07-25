@@ -1,100 +1,75 @@
-# Ping Monitor v3
-
-Nova versão da ferramenta de teste de ping, feita do zero em Python.
-
-## O que muda em relação à v2.0
-
-| v2.0 | v3 |
-|---|---|
-| Abre o CMD e roda `ping` um ativo por vez | Ping nativo (ICMP), assíncrono, dezenas em paralelo |
-| Sem histórico | Histórico de latência e disponibilidade por ativo, com gráfico |
-| Sem alerta | Alerta visual (toast na tela) quando um ativo cai, com confirmação por N falhas seguidas para evitar alarme falso |
-| Sem relatório | Exportação de relatório em Excel (uptime %, RTT médio, status atual) |
-| Cadastro manual único | Importação/atualização em massa via planilha Excel + cadastro manual na própria ferramenta |
-| Uso local, uma máquina por vez | Aplicação web — qualquer pessoa na rede interna acessa pelo navegador |
-
-## Como instalar (sem precisar de Python nos PCs finais)
-
-A ideia é gerar **um único arquivo `PingMonitor.exe`** uma vez, e depois copiar esse
-arquivo para qualquer PC Windows — nesses PCs finais não precisa instalar Python
-nem nada, é só dar dois cliques.
-
-Existem dois jeitos de gerar esse `.exe`:
-
-### Opção A — GitHub Actions (sem instalar absolutamente nada na sua máquina)
-
-O projeto já vem com um arquivo `.github/workflows/build.yml` pronto. O GitHub
-compila o `.exe` para você, numa máquina Windows na nuvem dele.
-
-1. Crie uma conta gratuita em [github.com](https://github.com) (se ainda não tiver).
-2. Crie um repositório novo (pode ser privado) e envie esta pasta do projeto
-   inteira para lá (pelo site mesmo: "Add file" → "Upload files", arraste tudo).
-3. Vá na aba **Actions** do repositório. O build já roda sozinho assim que você
-   sobe os arquivos (ou clique em "Run workflow" para rodar na hora).
-4. Aguarde o ícone ficar verde (leva 2–4 minutos).
-5. Clique no build concluído → na seção **Artifacts**, baixe o `PingMonitor-windows.zip`.
-6. Dentro dele está o `PingMonitor.exe`, pronto pra copiar para qualquer PC Windows.
-
-### Opção B — Build local (`build_windows.bat`)
-
-Se preferir gerar o `.exe` numa máquina Windows com Python já instalado:
-
-1. Extraia esta pasta do projeto.
-2. Dê dois cliques em **`build_windows.bat`**.
-3. Aguarde (a primeira vez demora alguns minutos, baixando as dependências e
-   empacotando).
-4. Ao final, o arquivo pronto estará em: `dist\PingMonitor.exe`
-
-### Distribuir para os PCs finais (depois de gerado o .exe, por qualquer opção)
-
-1. Copie **apenas o arquivo `dist\PingMonitor.exe`** para qualquer PC Windows
-   (pendrive, rede, e-mail — como preferir). Não precisa copiar mais nada.
-2. Dê dois cliques em `PingMonitor.exe`.
-3. Uma janela preta (console) abre mostrando que o servidor subiu, e o navegador
-   abre sozinho em `http://localhost:8000`.
-4. Para acessar de outras máquinas da rede: `http://<IP-deste-PC>:8000`
-5. Para parar, feche a janela preta (ou Ctrl+C).
-
-> O banco de dados (`ping_tool.db`) é criado automaticamente na mesma pasta onde
-> o `.exe` está — cada instalação tem seus próprios dados, independente das outras.
-
-### Alternativa — rodar direto com Python (modo desenvolvimento)
-
-Se preferir rodar sem gerar o `.exe` (útil para desenvolvimento/testes):
+Ping Monitor v4 — Sotreq CAT
+Sistema de monitoramento de ping por equipamento, com login e perfis de
+usuário, teste pontual via CMD, monitoramento contínuo controlado
+manualmente, e identidade visual CAT.
+Primeiro acesso
+Usuário padrão criado automaticamente na primeira execução:
 ```
-pip install -r requirements.txt
-python run.py
+usuário: admin
+senha:   admin123
 ```
-ou, sem abrir o navegador automaticamente:
-```
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-## Primeiro uso
-
-1. Abra o painel no navegador.
-2. Clique em **Importar Excel** e envie a planilha atual de ativos (precisa ter uma coluna de IP; colunas de nome e grupo são opcionais e reconhecidas automaticamente por vários nomes comuns, ex: "Nome", "IP", "Grupo").
-3. O monitoramento começa sozinho, em ciclos de 30 segundos (ajustável em `app/main.py`, constante `CYCLE_SECONDS`).
-4. Para adicionar um ativo novo sem mexer na planilha, use o botão **+ Ativo**.
-5. Clique em um card para ver o histórico de latência; duplo clique para editar.
-
-## Pontos de ajuste importantes
-
-- `app/ping_service.py`:
-  - `MAX_CONCURRENT_PINGS` (padrão 40) — quantos pings simultâneos. Em redes mais sensíveis, reduza.
-  - `PING_COUNT` / `PING_TIMEOUT` — quantos pacotes e tempo de espera por tentativa.
-- `app/main.py`:
-  - `CYCLE_SECONDS` (padrão 30) — intervalo entre rodadas de ping.
-  - `FAILURE_THRESHOLD` (padrão 2) — quantas falhas seguidas até disparar o alerta de queda.
-
-## Banco de dados
-
-Por padrão usa SQLite (`ping_tool.db`, criado automaticamente na primeira execução). Se no futuro quiser
-usar o mesmo SQL Server do fleet monitoring, basta trocar a `DATABASE_URL` em `app/database.py` por uma
-connection string SQL Server (via `pyodbc`).
-
-## Observação sobre privilégios de rede
-
-O ping é feito com `privileged=False` (via `icmplib`), o que evita precisar rodar o servidor como
-administrador/root. Em algumas distribuições Linux pode ser necessário liberar um range de ping não
-privilegiado (`net.ipv4.ping_group_range`) — no Windows normalmente funciona sem ajustes.
+Troque essa senha assim que possível (crie um novo admin com senha própria
+pela tela de "Usuários" e remova ou reserve o `admin` padrão).
+Perfis de usuário
+Perfil	Pode
+Admin	Tudo, incluindo cadastrar/remover usuários e ver o log de auditoria
+Operador	Tudo, exceto gerenciar usuários (importar planilha, editar ativos, controlar play/pause do monitoramento, testar ping)
+Leitura	Só visualizar o painel e testar ping pontual (aba 1)
+Todo login/logout e ação importante (criar usuário, importar planilha,
+editar ativo, iniciar/parar monitoramento, testar ping) fica registrado
+no log de auditoria, visível para o Admin.
+As duas abas
+1 · Teste Pontual — escolha um equipamento, marque quais dos 4 ativos
+quer testar, escolha pontual (4 pacotes) ou contínuo (`-t`), e o sistema
+abre uma janela de CMD por ativo já rodando o ping. Só abre CMD de verdade
+quando rodando no Windows (é o caso do `.exe`).
+2 · Monitoramento — grade de todos os equipamentos, com ícone por tipo
+(caminhão, escavadeira, trator, carregadeira, perfuratriz, motoniveladora
+etc.) e um indicador por ativo (MEMS / DISPLAY / DIM-RIM-PLE / AVI LTE).
+Não inicia sozinho — só começa a pingar quando você aperta
+"Iniciar Monitoramento", e para quando aperta de novo. Filtros de grupo
+(tipo de equipamento), status e busca, com contadores Geral e Filtrado.
+Clique num indicador de ativo pra ver o histórico de latência — quedas
+aparecem marcadas em vermelho no gráfico.
+Importando os ativos
+Botão Importar Excel na aba de Monitoramento, apontando para a aba
+"IPs" da planilha de automação (ex: `IPs_Automação_Mina_Convencional`).
+Cada linha (TAG) vira um equipamento com 4 ativos: MEMS, DISPLAY (IP da
+coluna G407/G610), DIM/RIM/PLE e AVI LTE. Reimportar atualiza os IPs sem
+duplicar equipamentos.
+O tipo de equipamento e o ícone são deduzidos automaticamente pelo prefixo
+do TAG (CA=caminhão, EC/ES=escavadeira, PC=carregadeira, TT/TU=trator,
+PZ=perfuratriz, MA/GD=motoniveladora, BM/1LT=veículo de apoio/leve).
+Como instalar (sem precisar de Python nos PCs finais)
+Igual à versão anterior — veja a seção completa mais abaixo. Resumo:
+Opção A (sem instalar nada): suba este projeto num repositório GitHub
+(o workflow `.github/workflows/build.yml` já está incluso) e baixe o
+`.exe` pronto na aba Actions → Artifacts.
+Opção B: rode `build_windows.bat` numa máquina Windows com Python.
+Depois, copie só o `PingMonitor.exe` gerado para qualquer PC Windows.
+Opção A — GitHub Actions (sem instalar absolutamente nada na sua máquina)
+Crie uma conta gratuita em github.com.
+Crie um repositório novo (pode ser privado) e envie os arquivos do
+projeto (extraia o zip antes — pastas precisam existir de verdade no
+repositório, não dentro de um zip).
+Vá na aba Actions. O build roda sozinho a cada envio de arquivo, ou
+clique em "Run workflow".
+Quando ficar verde, baixe o artifact PingMonitor-windows — dentro
+está o `.exe`.
+Opção B — Build local (`build_windows.bat`)
+Numa máquina Windows com Python instalado, dê dois cliques em
+`build_windows.bat`. O `.exe` fica em `dist\PingMonitor.exe`.
+Rodando o .exe
+Dois cliques no `PingMonitor.exe` — abre uma janela de console e o
+navegador sozinho em `http://localhost:8000`. Outros PCs da rede acessam
+via `http://<IP-deste-PC>:8000`. O banco de dados (`ping_tool.db`) e a
+chave de sessão (`.secret_key`) ficam salvos ao lado do `.exe`.
+Fuso horário
+Tudo é salvo internamente em UTC e convertido para horário de Brasília
+(America/Sao_Paulo, UTC-3) na hora de exibir — não precisa configurar nada.
+Ajustes finos
+`app/monitoring.py`: `CYCLE_SECONDS` (30s) e `FAILURE_THRESHOLD` (2
+falhas seguidas até alertar).
+`app/ping_service.py`: `MAX_CONCURRENT_PINGS`, `PING_COUNT`, `PING_TIMEOUT`.
+`app/equipment_types.py`: mapa de prefixo de TAG → tipo/ícone de
+equipamento — ajuste aqui se algum prefixo novo aparecer sem classificação.
