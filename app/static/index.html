@@ -3,227 +3,412 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ping Monitor — Painel de Ativos</title>
+<title>Ping Monitor — Sotreq CAT</title>
 <script src="/static/vendor/chart.umd.js"></script>
+<script src="/static/icons.js"></script>
 <style>
   :root{
-    --bg: #12161b;
-    --panel: #1a2028;
-    --panel-2: #212832;
-    --line: #2a3240;
-    --text: #e7ebef;
-    --muted: #8b96a3;
+    --cat-yellow: #FFCC11;
+    --cat-yellow-dim: #cfa30d;
+    --bg: #101010;
+    --panel: #181818;
+    --panel-2: #1f1f1f;
+    --line: #2c2c2c;
+    --text: #f2f2f0;
+    --muted: #9a9a94;
     --online: #34d67f;
-    --online-dim: #1e6a45;
-    --warn: #f0a83c;
     --offline: #ef4a52;
-    --accent: #4fb0ff;
-    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Roboto Mono", monospace;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Consolas, "Roboto Mono", monospace;
   }
   *{box-sizing:border-box;}
-  body{
-    margin:0; background:var(--bg); color:var(--text);
-    font-family:var(--font-ui); min-height:100vh;
-  }
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--font-ui); min-height:100vh; }
+  button{ font-family:var(--font-ui); cursor:pointer; }
+
+  /* ---------- Header ---------- */
   header{
     display:flex; align-items:center; justify-content:space-between;
-    padding:18px 28px; border-bottom:1px solid var(--line);
-    background:linear-gradient(180deg, #151b21, #12161b);
-    position:sticky; top:0; z-index:5;
-    flex-wrap:wrap; gap:14px;
+    padding:14px 26px; border-bottom:2px solid var(--cat-yellow);
+    background:#000; position:sticky; top:0; z-index:30; flex-wrap:wrap; gap:12px;
   }
-  .brand{display:flex; flex-direction:column; gap:2px;}
-  .eyebrow{
-    font-family:var(--font-mono); font-size:11px; letter-spacing:.14em;
-    color:var(--accent); text-transform:uppercase;
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .bar{ width:6px; height:26px; background:var(--cat-yellow); border-radius:2px; }
+  .brand h1{ margin:0; font-size:18px; font-weight:750; }
+  .brand .sub{ font-size:10.5px; color:var(--muted); letter-spacing:.1em; text-transform:uppercase; }
+  .user-box{ display:flex; align-items:center; gap:12px; font-size:13px; }
+  .role-pill{
+    font-family:var(--font-mono); font-size:10px; padding:3px 8px; border-radius:20px;
+    background:var(--cat-yellow); color:#161200; font-weight:700; text-transform:uppercase;
   }
-  h1{margin:0; font-size:20px; font-weight:650;}
-  .stats{display:flex; gap:22px; align-items:center; font-family:var(--font-mono);}
-  .stat{text-align:center;}
-  .stat .n{font-size:22px; font-weight:700; display:block; line-height:1;}
-  .stat .l{font-size:10px; color:var(--muted); letter-spacing:.08em;}
-  .stat.online .n{color:var(--online);}
-  .stat.offline .n{color:var(--offline);}
-  .actions{display:flex; gap:10px;}
-  button{
-    font-family:var(--font-ui); border:1px solid var(--line); background:var(--panel-2);
-    color:var(--text); padding:9px 14px; border-radius:7px; font-size:13px;
-    cursor:pointer; transition:.15s border-color, .15s background;
+  .ghost-btn{
+    background:transparent; border:1px solid var(--line); color:var(--text);
+    padding:7px 12px; border-radius:7px; font-size:12.5px;
   }
-  button:hover{border-color:var(--accent); background:#242c37;}
-  button.primary{background:var(--accent); color:#0b1117; border-color:var(--accent); font-weight:600;}
-  button.primary:hover{filter:brightness(1.08);}
+  .ghost-btn:hover{ border-color:var(--cat-yellow); }
 
-  .toolbar{
-    display:flex; gap:12px; padding:16px 28px; align-items:center; flex-wrap:wrap;
+  /* ---------- Tabs ---------- */
+  .tabs{ display:flex; gap:2px; padding:0 26px; background:#000; border-bottom:1px solid var(--line); }
+  .tab-btn{
+    background:transparent; border:none; color:var(--muted); padding:13px 18px; font-size:13.5px;
+    font-weight:600; border-bottom:3px solid transparent; transition:.15s;
   }
-  input[type=text], select{
-    background:var(--panel); border:1px solid var(--line); color:var(--text);
-    padding:8px 12px; border-radius:7px; font-size:13px; font-family:var(--font-ui);
-  }
+  .tab-btn.active{ color:var(--cat-yellow); border-bottom-color:var(--cat-yellow); }
+  .tab-btn:hover{ color:var(--text); }
 
-  #grid{
-    display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr));
-    gap:12px; padding:4px 28px 32px;
-  }
-  .card{
-    background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    padding:14px; cursor:pointer; transition:.15s transform, .15s border-color;
-    position:relative; overflow:hidden;
-  }
-  .card:hover{transform:translateY(-2px); border-color:#3a4557;}
-  .card .top{display:flex; justify-content:space-between; align-items:flex-start;}
-  .card .name{font-weight:600; font-size:14px; margin-bottom:2px;}
-  .card .ip{font-family:var(--font-mono); font-size:12px; color:var(--muted);}
-  .card .group{
-    font-family:var(--font-mono); font-size:9.5px; color:var(--muted);
-    letter-spacing:.06em; text-transform:uppercase; margin-top:8px;
-  }
-  .card .rtt{font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-top:6px;}
+  .tab-panel{ display:none; padding:20px 26px 40px; }
+  .tab-panel.active{ display:block; }
 
-  .pulse{
-    width:11px; height:11px; border-radius:50%; position:relative; flex-shrink:0; margin-top:2px;
+  /* ---------- Tab 1: Teste Pontual ---------- */
+  .pontual-box{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px;
+    max-width:640px;
   }
-  .pulse.online{background:var(--online); box-shadow:0 0 0 0 rgba(52,214,127,.6); animation:ping 1.8s infinite;}
-  .pulse.offline{background:var(--offline);}
-  .pulse.unknown{background:#555;}
-  @keyframes ping{
-    0%{box-shadow:0 0 0 0 rgba(52,214,127,.55);}
-    70%{box-shadow:0 0 0 9px rgba(52,214,127,0);}
-    100%{box-shadow:0 0 0 0 rgba(52,214,127,0);}
+  .pontual-box label{ display:block; font-size:12px; color:var(--muted); margin:14px 0 6px; }
+  select, input[type=text]{
+    background:#0f0f0f; border:1px solid var(--line); color:var(--text);
+    padding:9px 12px; border-radius:7px; font-size:13.5px; width:100%; font-family:var(--font-ui);
   }
-  .card.offline{border-color: rgba(239,74,82,.5); background:linear-gradient(180deg, rgba(239,74,82,.06), var(--panel));}
-  .card.offline .name{color:var(--offline);}
+  .asset-list{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+  .asset-row{
+    display:flex; align-items:center; gap:10px; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:8px; padding:9px 12px; font-size:13px;
+  }
+  .asset-row .ip{ font-family:var(--font-mono); color:var(--muted); margin-left:auto; }
+  .mode-row{ display:flex; gap:18px; margin-top:14px; font-size:13px; }
+  .mode-row label{ display:flex; align-items:center; gap:6px; margin:0; color:var(--text); }
+  .primary-btn{
+    background:var(--cat-yellow); color:#161200; border:none; padding:11px 18px; border-radius:8px;
+    font-weight:750; font-size:13.5px; margin-top:20px;
+  }
+  .primary-btn:hover{ filter:brightness(1.06); }
+  .cmd-note{ font-size:11.5px; color:var(--muted); margin-top:10px; }
 
-  /* Modais */
-  .overlay{
-    position:fixed; inset:0; background:rgba(8,10,13,.65); display:none;
-    align-items:center; justify-content:center; z-index:20; padding:20px;
+  /* ---------- Tab 2: Monitoramento ---------- */
+  .control-bar{
+    display:flex; align-items:center; gap:14px; background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:12px 16px; margin-bottom:16px; flex-wrap:wrap;
   }
-  .overlay.show{display:flex;}
-  .modal{
-    background:var(--panel); border:1px solid var(--line); border-radius:12px;
-    padding:22px; width:100%; max-width:420px;
+  #playBtn{
+    background:var(--online); color:#04210f; border:none; padding:9px 20px; border-radius:8px;
+    font-weight:750; font-size:13px;
   }
-  .modal h2{margin:0 0 16px; font-size:16px;}
-  .modal label{display:block; font-size:12px; color:var(--muted); margin:12px 0 5px;}
-  .modal input[type=text], .modal input[type=file]{width:100%;}
-  .modal .row{display:flex; gap:10px; justify-content:flex-end; margin-top:20px;}
-  .modal.wide{max-width:640px;}
+  #playBtn.running{ background:var(--offline); color:#2a0709; }
+  .cycle-info{ font-family:var(--font-mono); font-size:11.5px; color:var(--muted); }
 
-  /* Toasts de alerta */
-  #toasts{position:fixed; top:16px; right:16px; z-index:50; display:flex; flex-direction:column; gap:8px;}
+  .counters{ display:flex; gap:26px; margin-left:auto; font-family:var(--font-mono); flex-wrap:wrap; }
+  .counter-group{ display:flex; flex-direction:column; gap:2px; }
+  .counter-group .lbl{ font-size:9.5px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; }
+  .counter-group .vals{ display:flex; gap:14px; font-size:15px; font-weight:700; }
+  .counter-group .vals span.on{ color:var(--online); }
+  .counter-group .vals span.off{ color:var(--offline); }
+
+  .toolbar{ display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .toolbar select, .toolbar input{ width:auto; min-width:160px; }
+
+  #grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:12px; }
+  .eq-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px;
+    transition:.15s border-color, .15s transform;
+  }
+  .eq-card:hover{ transform:translateY(-2px); border-color:#454029; }
+  .eq-card.has-offline{ border-color:rgba(239,74,82,.5); background:linear-gradient(180deg, rgba(239,74,82,.06), var(--panel)); }
+  .eq-top{ display:flex; align-items:center; gap:10px; }
+  .eq-icon{ width:36px; height:24px; color:var(--cat-yellow); flex-shrink:0; }
+  .eq-icon svg{ width:100%; height:100%; }
+  .eq-tag{ font-weight:700; font-size:14px; }
+  .eq-model{ font-size:11px; color:var(--muted); font-family:var(--font-mono); }
+  .eq-type{ font-size:9.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-top:8px; }
+  .asset-dots{ display:flex; gap:6px; margin-top:10px; }
+  .asset-dot{
+    flex:1; text-align:center; padding:5px 2px; border-radius:6px; font-family:var(--font-mono);
+    font-size:9.5px; font-weight:700; cursor:pointer; border:1px solid var(--line);
+  }
+  .asset-dot.online{ background:rgba(52,214,127,.15); color:var(--online); border-color:rgba(52,214,127,.4); }
+  .asset-dot.offline{ background:rgba(239,74,82,.18); color:var(--offline); border-color:rgba(239,74,82,.5); }
+  .asset-dot.unknown{ background:#242424; color:var(--muted); }
+
+  .empty{ color:var(--muted); padding:40px; text-align:center; font-family:var(--font-mono); font-size:13px; }
+
+  /* ---------- Toasts ---------- */
+  #toasts{ position:fixed; top:70px; right:16px; z-index:60; display:flex; flex-direction:column; gap:8px; }
   .toast{
-    background:#241417; border:1px solid var(--offline); color:var(--text);
-    padding:12px 16px; border-radius:8px; font-size:13px; min-width:240px;
-    box-shadow:0 6px 18px rgba(0,0,0,.4); animation:slidein .2s ease-out;
+    background:#241417; border:1px solid var(--offline); padding:12px 16px; border-radius:8px;
+    font-size:13px; min-width:240px; box-shadow:0 6px 18px rgba(0,0,0,.4);
   }
-  .toast b{color:var(--offline);}
-  @keyframes slidein{from{transform:translateX(20px); opacity:0;} to{transform:translateX(0); opacity:1;}}
+  .toast b{ color:var(--offline); }
 
-  .empty{color:var(--muted); padding:40px; text-align:center; font-family:var(--font-mono); font-size:13px;}
+  /* ---------- Modais ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center;
+    justify-content:center; z-index:50; padding:20px;
+  }
+  .overlay.show{ display:flex; }
+  .modal{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:22px; width:100%; max-width:460px; }
+  .modal.wide{ max-width:680px; }
+  .modal h2{ margin:0 0 16px; font-size:16px; }
+  .modal .row{ display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  th, td{ text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); }
+  th{ color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; }
+  .danger-btn{ background:transparent; border:1px solid var(--offline); color:var(--offline); padding:5px 10px; border-radius:6px; font-size:11.5px; }
 </style>
 </head>
 <body>
 
 <header>
   <div class="brand">
-    <span class="eyebrow">Rede interna · Monitoramento contínuo</span>
-    <h1>Ping Monitor</h1>
+    <div class="bar"></div>
+    <div>
+      <h1>Ping Monitor</h1>
+      <div class="sub">Sotreq CAT · Automação Mina</div>
+    </div>
   </div>
-  <div class="stats">
-    <div class="stat online"><span class="n" id="statOnline">–</span><span class="l">ONLINE</span></div>
-    <div class="stat offline"><span class="n" id="statOffline">–</span><span class="l">OFFLINE</span></div>
-    <div class="stat"><span class="n" id="statTotal">–</span><span class="l">TOTAL</span></div>
-  </div>
-  <div class="actions">
-    <button onclick="openImport()">Importar Excel</button>
-    <button onclick="openAssetModal()">+ Ativo</button>
-    <button class="primary" onclick="exportReport()">Exportar Relatório</button>
+  <div class="user-box">
+    <span id="userLabel"></span>
+    <span class="role-pill" id="roleLabel"></span>
+    <button class="ghost-btn" id="usersBtn" style="display:none;" onclick="openUsers()">Usuários</button>
+    <button class="ghost-btn" onclick="logout()">Sair</button>
   </div>
 </header>
 
-<div class="toolbar">
-  <input type="text" id="search" placeholder="Buscar por nome ou IP..." oninput="renderGrid()">
-  <select id="filterGroup" onchange="renderGrid()"><option value="">Todos os grupos</option></select>
-  <select id="filterStatus" onchange="renderGrid()">
-    <option value="">Todos os status</option>
-    <option value="online">Somente online</option>
-    <option value="offline">Somente offline</option>
-  </select>
+<div class="tabs">
+  <button class="tab-btn active" data-tab="pontual" onclick="switchTab('pontual')">1 · Teste Pontual</button>
+  <button class="tab-btn" data-tab="monitor" onclick="switchTab('monitor')">2 · Monitoramento</button>
 </div>
 
-<div id="grid"></div>
+<!-- ===================== TAB 1: TESTE PONTUAL ===================== -->
+<div class="tab-panel active" id="tab-pontual">
+  <div class="pontual-box">
+    <label>Equipamento</label>
+    <select id="pontualEquip" onchange="renderPontualAssets()"></select>
 
-<!-- Toasts -->
+    <div class="asset-list" id="pontualAssetList"></div>
+
+    <div class="mode-row">
+      <label><input type="radio" name="pontualMode" value="pontual" checked> Pontual (4 pacotes)</label>
+      <label><input type="radio" name="pontualMode" value="continuo"> Contínuo (-t, até fechar)</label>
+    </div>
+
+    <button class="primary-btn" onclick="runCmdPing()">Abrir CMD e testar</button>
+    <div class="cmd-note">Abre uma janela de CMD por ativo selecionado, rodando o ping. Funciona apenas quando o servidor está rodando no próprio Windows local.</div>
+  </div>
+</div>
+
+<!-- ===================== TAB 2: MONITORAMENTO ===================== -->
+<div class="tab-panel" id="tab-monitor">
+  <div class="control-bar">
+    <button id="playBtn" onclick="toggleMonitoring()">▶ Iniciar Monitoramento</button>
+    <span class="cycle-info" id="cycleInfo">parado</span>
+    <div class="counters">
+      <div class="counter-group">
+        <span class="lbl">Geral</span>
+        <span class="vals"><span class="on" id="cGeralOn">0</span><span class="off" id="cGeralOff">0</span><span id="cGeralTotal">0</span></span>
+      </div>
+      <div class="counter-group">
+        <span class="lbl">Filtrado</span>
+        <span class="vals"><span class="on" id="cFiltOn">0</span><span class="off" id="cFiltOff">0</span><span id="cFiltTotal">0</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="search" placeholder="Buscar por tag/modelo..." oninput="renderGrid()">
+    <select id="filterGroup" onchange="renderGrid()"><option value="">Todos os grupos</option></select>
+    <select id="filterStatus" onchange="renderGrid()">
+      <option value="">Todos os status</option>
+      <option value="online">Só sem falhas</option>
+      <option value="offline">Com algum ativo offline</option>
+    </select>
+    <button class="ghost-btn" onclick="openImport()">Importar Excel</button>
+    <button class="ghost-btn" onclick="exportReport()">Exportar Relatório</button>
+  </div>
+
+  <div id="grid"></div>
+</div>
+
 <div id="toasts"></div>
-
-<!-- Modal: adicionar/editar ativo -->
-<div class="overlay" id="assetOverlay">
-  <div class="modal">
-    <h2 id="assetModalTitle">Novo ativo</h2>
-    <input type="hidden" id="assetId">
-    <label>Nome</label>
-    <input type="text" id="assetName" placeholder="Ex: Caminhão 41 - Rádio">
-    <label>Endereço IP</label>
-    <input type="text" id="assetIp" placeholder="Ex: 10.20.1.41">
-    <label>Grupo</label>
-    <input type="text" id="assetGroup" placeholder="Ex: Frota, Escritório...">
-    <div class="row">
-      <button onclick="closeAssetModal()">Cancelar</button>
-      <button class="primary" onclick="saveAsset()">Salvar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal: importar excel -->
-<div class="overlay" id="importOverlay">
-  <div class="modal">
-    <h2>Importar planilha Excel</h2>
-    <p style="color:var(--muted); font-size:12.5px;">
-      A planilha precisa ter uma coluna de IP (ex: "IP"). Colunas de nome e grupo são opcionais.
-      IPs já cadastrados são atualizados; IPs novos são adicionados.
-    </p>
-    <input type="file" id="excelFile" accept=".xlsx,.xls">
-    <div class="row">
-      <button onclick="closeImport()">Cancelar</button>
-      <button class="primary" onclick="uploadExcel()">Importar</button>
-    </div>
-  </div>
-</div>
 
 <!-- Modal: histórico -->
 <div class="overlay" id="historyOverlay">
   <div class="modal wide">
     <h2 id="historyTitle">Histórico</h2>
     <canvas id="historyChart" height="180"></canvas>
+    <div class="row"><button class="ghost-btn" onclick="closeHistory()">Fechar</button></div>
+  </div>
+</div>
+
+<!-- Modal: importar excel -->
+<div class="overlay" id="importOverlay">
+  <div class="modal">
+    <h2>Importar planilha de IPs</h2>
+    <p style="color:var(--muted); font-size:12.5px;">Aba "IPs" da planilha de automação. Cria/atualiza equipamentos e os 4 ativos padrão (MEMS, DISPLAY, DIM/RIM/PLE, AVI LTE).</p>
+    <input type="file" id="excelFile" accept=".xlsx,.xls">
     <div class="row">
-      <button onclick="closeHistory()">Fechar</button>
+      <button class="ghost-btn" onclick="closeImport()">Cancelar</button>
+      <button class="primary-btn" onclick="uploadExcel()">Importar</button>
     </div>
   </div>
 </div>
 
+<!-- Modal: usuários (admin) -->
+<div class="overlay" id="usersOverlay">
+  <div class="modal wide">
+    <h2>Usuários e Log de Auditoria</h2>
+    <table id="usersTable"><thead><tr><th>Usuário</th><th>Perfil</th><th></th></tr></thead><tbody></tbody></table>
+
+    <label style="display:block; font-size:12px; color:var(--muted); margin:16px 0 6px;">Novo usuário</label>
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="newUsername" placeholder="usuário" style="width:auto; flex:1;">
+      <input type="text" id="newPassword" placeholder="senha" style="width:auto; flex:1;">
+      <select id="newRole" style="width:auto;">
+        <option value="readonly">Leitura</option>
+        <option value="operator">Operador</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button class="primary-btn" style="margin-top:0;" onclick="createUser()">+ Criar</button>
+    </div>
+
+    <h2 style="margin-top:24px;">Log de Auditoria (últimas ações)</h2>
+    <div style="max-height:220px; overflow:auto;">
+      <table id="auditTable"><thead><tr><th>Quando</th><th>Usuário</th><th>Ação</th><th>Detalhes</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="row"><button class="ghost-btn" onclick="closeUsers()">Fechar</button></div>
+  </div>
+</div>
+
 <script>
-let assets = {};       // id -> asset
+let me = null;
+let equipmentList = [];
+let equipmentMap = {};   // id -> equipment
+let assetIndex = {};     // assetId -> {equipmentId, assetType}
 let chartInstance = null;
 
-async function loadAssets(){
-  const res = await fetch('/api/assets');
-  const data = await res.json();
-  assets = {};
-  data.forEach(a => assets[a.id] = a);
+// ---------- Boot ----------
+async function boot(){
+  const res = await fetch('/api/me');
+  if (!res.ok){ window.location.href = '/login'; return; }
+  me = await res.json();
+  document.getElementById('userLabel').textContent = me.username;
+  document.getElementById('roleLabel').textContent = ({admin:'Admin', operator:'Operador', readonly:'Leitura'})[me.role];
+  if (me.role === 'admin') document.getElementById('usersBtn').style.display = 'inline-block';
+
+  await loadEquipment();
+  connectWS();
+  await refreshMonitoringStatus();
+  setInterval(refreshMonitoringStatus, 15000);
+}
+
+async function logout(){
+  await fetch('/api/logout', {method:'POST'});
+  window.location.href = '/login';
+}
+
+// ---------- Tabs ----------
+function switchTab(name){
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ---------- Dados de equipamentos ----------
+async function loadEquipment(){
+  const res = await fetch('/api/equipment');
+  equipmentList = await res.json();
+  equipmentMap = {};
+  assetIndex = {};
+  equipmentList.forEach(eq => {
+    equipmentMap[eq.id] = eq;
+    eq.assets.forEach(a => { assetIndex[a.id] = {equipmentId: eq.id, assetType: a.asset_type}; });
+  });
   updateGroupFilter();
+  populatePontualSelect();
   renderGrid();
 }
 
 function updateGroupFilter(){
   const sel = document.getElementById('filterGroup');
   const current = sel.value;
-  const groups = [...new Set(Object.values(assets).map(a => a.group || 'Geral'))].sort();
-  sel.innerHTML = '<option value="">Todos os grupos</option>' +
-    groups.map(g => `<option value="${g}">${g}</option>`).join('');
+  const groups = [...new Set(equipmentList.map(e => e.machine_type))].sort();
+  sel.innerHTML = '<option value="">Todos os grupos</option>' + groups.map(g => `<option value="${g}">${g}</option>`).join('');
   sel.value = current;
+}
+
+// ---------- Tab 1: Teste Pontual ----------
+function populatePontualSelect(){
+  const sel = document.getElementById('pontualEquip');
+  const current = sel.value;
+  sel.innerHTML = equipmentList
+    .sort((a,b) => a.tag.localeCompare(b.tag))
+    .map(e => `<option value="${e.id}">${e.tag} — ${e.model || e.machine_type}</option>`).join('');
+  if (current) sel.value = current;
+  renderPontualAssets();
+}
+
+function renderPontualAssets(){
+  const eqId = parseInt(document.getElementById('pontualEquip').value);
+  const eq = equipmentMap[eqId];
+  const box = document.getElementById('pontualAssetList');
+  if (!eq){ box.innerHTML = ''; return; }
+  box.innerHTML = eq.assets.map(a => `
+    <label class="asset-row">
+      <input type="checkbox" class="pontual-asset-cb" value="${a.id}" ${a.ip ? '' : 'disabled'}>
+      ${a.asset_label}
+      <span class="ip">${a.ip || 'sem IP cadastrado'}</span>
+    </label>
+  `).join('');
+}
+
+async function runCmdPing(){
+  const checked = [...document.querySelectorAll('.pontual-asset-cb:checked')];
+  if (!checked.length){ alert('Selecione ao menos um ativo com IP cadastrado.'); return; }
+  const mode = document.querySelector('input[name=pontualMode]:checked').value;
+  const eqId = parseInt(document.getElementById('pontualEquip').value);
+  const eq = equipmentMap[eqId];
+
+  for (const cb of checked){
+    const asset = eq.assets.find(a => a.id === parseInt(cb.value));
+    if (!asset || !asset.ip) continue;
+    await fetch('/api/cmd-ping', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ip: asset.ip, continuous: mode === 'continuo'})
+    });
+  }
+}
+
+// ---------- Tab 2: Monitoramento ----------
+async function refreshMonitoringStatus(){
+  const res = await fetch('/api/monitoring/status');
+  if (!res.ok) return;
+  const data = await res.json();
+  setPlayButton(data.running);
+  document.getElementById('cycleInfo').textContent = data.running
+    ? `rodando · ciclo de ${data.cycle_seconds}s`
+    : 'parado';
+}
+
+function setPlayButton(running){
+  const btn = document.getElementById('playBtn');
+  btn.classList.toggle('running', running);
+  btn.textContent = running ? '⏸ Parar Monitoramento' : '▶ Iniciar Monitoramento';
+}
+
+async function toggleMonitoring(){
+  const btn = document.getElementById('playBtn');
+  const running = btn.classList.contains('running');
+  const url = running ? '/api/monitoring/stop' : '/api/monitoring/start';
+  const res = await fetch(url, {method:'POST'});
+  if (!res.ok){ alert('Você não tem permissão para controlar o monitoramento.'); return; }
+  const data = await res.json();
+  setPlayButton(data.running);
+  document.getElementById('cycleInfo').textContent = data.running ? 'rodando · ciclo de 30s' : 'parado';
+}
+
+function equipmentStatus(eq){
+  const statuses = eq.assets.map(a => a.last_status);
+  if (statuses.some(s => s === false)) return 'offline';
+  if (statuses.every(s => s === true)) return 'online';
+  return 'unknown';
 }
 
 function renderGrid(){
@@ -232,50 +417,65 @@ function renderGrid(){
   const fg = document.getElementById('filterGroup').value;
   const fs = document.getElementById('filterStatus').value;
 
-  let list = Object.values(assets).filter(a => {
-    if (q && !(a.name.toLowerCase().includes(q) || a.ip.includes(q))) return false;
-    if (fg && (a.group || 'Geral') !== fg) return false;
-    if (fs === 'online' && !a.last_status) return false;
-    if (fs === 'offline' && a.last_status !== false) return false;
+  let list = equipmentList.filter(eq => {
+    if (q && !(eq.tag.toLowerCase().includes(q) || (eq.model||'').toLowerCase().includes(q))) return false;
+    if (fg && eq.machine_type !== fg) return false;
+    const st = equipmentStatus(eq);
+    if (fs === 'online' && st !== 'online') return false;
+    if (fs === 'offline' && st !== 'offline') return false;
     return true;
   });
 
-  list.sort((a,b) => (a.group||'').localeCompare(b.group||'') || a.name.localeCompare(b.name));
+  list.sort((a,b) => a.tag.localeCompare(b.tag));
 
-  if (list.length === 0){
-    grid.innerHTML = '<div class="empty">Nenhum ativo cadastrado ainda. Importe uma planilha ou adicione manualmente.</div>';
-    updateStats();
-    return;
+  if (!list.length){
+    grid.innerHTML = '<div class="empty">Nenhum equipamento encontrado. Importe a planilha de IPs para começar.</div>';
+  } else {
+    grid.innerHTML = list.map(eq => {
+      const st = equipmentStatus(eq);
+      const cardCls = st === 'offline' ? 'eq-card has-offline' : 'eq-card';
+      return `
+        <div class="${cardCls}">
+          <div class="eq-top">
+            <div class="eq-icon">${getEquipmentIcon(eq.icon)}</div>
+            <div>
+              <div class="eq-tag">${eq.tag}</div>
+              <div class="eq-model">${eq.model || '—'}</div>
+            </div>
+          </div>
+          <div class="eq-type">${eq.machine_type}</div>
+          <div class="asset-dots">
+            ${eq.assets.map(a => `
+              <div class="asset-dot ${a.last_status === true ? 'online' : a.last_status === false ? 'offline' : 'unknown'}"
+                   onclick="openHistory(${a.id})" title="${a.asset_label} — ${a.ip || 'sem IP'}">
+                ${a.asset_type.split('_')[0].slice(0,3)}
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    }).join('');
   }
 
-  grid.innerHTML = list.map(a => {
-    const st = a.last_status === true ? 'online' : a.last_status === false ? 'offline' : 'unknown';
-    const cardCls = st === 'offline' ? 'card offline' : 'card';
-    const rtt = a.last_rtt_ms != null ? a.last_rtt_ms + ' ms' : '—';
-    return `
-      <div class="${cardCls}" data-id="${a.id}" onclick="openHistory(${a.id})" ondblclick="event.stopPropagation(); openAssetModal(assets[${a.id}])" title="Clique: ver histórico · Duplo clique: editar">
-        <div class="top">
-          <div>
-            <div class="name">${a.name}</div>
-            <div class="ip">${a.ip}</div>
-          </div>
-          <div class="pulse ${st}"></div>
-        </div>
-        <div class="group">${a.group || 'Geral'}</div>
-        <div class="rtt">RTT: ${rtt}</div>
-      </div>`;
-  }).join('');
-
-  updateStats();
+  updateCounters(list);
 }
 
-function updateStats(){
-  const all = Object.values(assets);
-  const online = all.filter(a => a.last_status === true).length;
-  const offline = all.filter(a => a.last_status === false).length;
-  document.getElementById('statOnline').textContent = online;
-  document.getElementById('statOffline').textContent = offline;
-  document.getElementById('statTotal').textContent = all.length;
+function updateCounters(filteredList){
+  const allAssets = equipmentList.flatMap(e => e.assets);
+  const filtAssets = filteredList.flatMap(e => e.assets);
+
+  const count = (arr) => ({
+    on: arr.filter(a => a.last_status === true).length,
+    off: arr.filter(a => a.last_status === false).length,
+    total: arr.length,
+  });
+
+  const g = count(allAssets), f = count(filtAssets);
+  document.getElementById('cGeralOn').textContent = g.on;
+  document.getElementById('cGeralOff').textContent = g.off;
+  document.getElementById('cGeralTotal').textContent = g.total;
+  document.getElementById('cFiltOn').textContent = f.on;
+  document.getElementById('cFiltOff').textContent = f.off;
+  document.getElementById('cFiltTotal').textContent = f.total;
 }
 
 // ---------- WebSocket ----------
@@ -286,7 +486,10 @@ function connectWS(){
     const msg = JSON.parse(ev.data);
     if (msg.type === 'status_update'){
       msg.assets.forEach(u => {
-        if (assets[u.id]) Object.assign(assets[u.id], u);
+        const eq = equipmentMap[u.equipment_id];
+        if (!eq) return;
+        const asset = eq.assets.find(a => a.id === u.id);
+        if (asset) Object.assign(asset, u);
       });
       renderGrid();
     } else if (msg.type === 'alert_down'){
@@ -300,41 +503,68 @@ function showToast(a){
   const box = document.getElementById('toasts');
   const el = document.createElement('div');
   el.className = 'toast';
-  el.innerHTML = `<b>Queda detectada</b><br>${a.name} (${a.ip})`;
+  el.innerHTML = `<b>Queda detectada</b><br>${a.equipment_tag} — ${a.asset_type} (${a.ip})`;
   box.appendChild(el);
   setTimeout(() => el.remove(), 8000);
 }
 
-// ---------- Modal: ativo ----------
-function openAssetModal(a){
-  document.getElementById('assetModalTitle').textContent = a ? 'Editar ativo' : 'Novo ativo';
-  document.getElementById('assetId').value = a ? a.id : '';
-  document.getElementById('assetName').value = a ? a.name : '';
-  document.getElementById('assetIp').value = a ? a.ip : '';
-  document.getElementById('assetGroup').value = a ? a.group : '';
-  document.getElementById('assetOverlay').classList.add('show');
+// ---------- Histórico com marcação de queda ----------
+async function openHistory(assetId){
+  const info = assetIndex[assetId];
+  const eq = equipmentMap[info.equipmentId];
+  const asset = eq.assets.find(a => a.id === assetId);
+
+  document.getElementById('historyTitle').textContent = `${eq.tag} — ${asset.asset_label} (${asset.ip || 'sem IP'})`;
+  document.getElementById('historyOverlay').classList.add('show');
+
+  const res = await fetch(`/api/history/${assetId}?hours=24`);
+  const rows = await res.json();
+
+  const labels = rows.map(r => new Date(r.timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}));
+  const rtts = rows.map(r => r.is_alive ? r.rtt_ms : null);
+  // Linha vermelha nos pontos sem comunicação, na base do gráfico (0), pra ficar visível
+  const downMarkers = rows.map(r => r.is_alive ? null : 0);
+
+  const ctx = document.getElementById('historyChart').getContext('2d');
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Latência (ms)',
+          data: rtts,
+          borderColor: '#FFCC11',
+          backgroundColor: 'rgba(255,204,17,.12)',
+          spanGaps: false,
+          tension: .25,
+          pointRadius: 2,
+        },
+        {
+          label: 'Sem comunicação',
+          data: downMarkers,
+          borderColor: '#ef4a52',
+          backgroundColor: '#ef4a52',
+          pointBackgroundColor: '#ef4a52',
+          pointRadius: 4,
+          showLine: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#9a9a94' } } },
+      scales: {
+        x: { ticks: { color:'#9a9a94', maxTicksLimit: 10 }, grid:{ color:'#2c2c2c' } },
+        y: { ticks: { color:'#9a9a94' }, grid:{ color:'#2c2c2c' }, title:{display:true, text:'ms', color:'#9a9a94'} }
+      }
+    }
+  });
 }
-function closeAssetModal(){ document.getElementById('assetOverlay').classList.remove('show'); }
+function closeHistory(){ document.getElementById('historyOverlay').classList.remove('show'); }
 
-async function saveAsset(){
-  const id = document.getElementById('assetId').value;
-  const body = {
-    name: document.getElementById('assetName').value.trim(),
-    ip: document.getElementById('assetIp').value.trim(),
-    group: document.getElementById('assetGroup').value.trim() || 'Geral',
-    active: true
-  };
-  if (!body.name || !body.ip){ alert('Preencha nome e IP.'); return; }
-
-  const url = id ? `/api/assets/${id}` : '/api/assets';
-  const method = id ? 'PUT' : 'POST';
-  const res = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  if (!res.ok){ const err = await res.json(); alert(err.detail || 'Erro ao salvar'); return; }
-  closeAssetModal();
-  loadAssets();
-}
-
-// ---------- Modal: importar excel ----------
+// ---------- Importar Excel ----------
 function openImport(){ document.getElementById('importOverlay').classList.add('show'); }
 function closeImport(){ document.getElementById('importOverlay').classList.remove('show'); }
 
@@ -346,59 +576,77 @@ async function uploadExcel(){
   const res = await fetch('/api/import-excel', {method:'POST', body: form});
   const data = await res.json();
   if (!res.ok){ alert(data.detail || 'Erro ao importar'); return; }
-  alert(`Importação concluída: ${data.created} novos, ${data.updated} atualizados, ${data.skipped} ignorados.`);
+  alert(`Importação concluída: ${data.equipamentos_criados} equipamentos novos, ${data.ativos_criados} ativos novos.`);
   closeImport();
-  loadAssets();
+  loadEquipment();
 }
-
-// ---------- Modal: histórico ----------
-async function openHistory(id){
-  const a = assets[id];
-  document.getElementById('historyTitle').textContent = `${a.name} — ${a.ip}`;
-  document.getElementById('historyOverlay').classList.add('show');
-
-  const res = await fetch(`/api/history/${id}?hours=24`);
-  const rows = await res.json();
-
-  const labels = rows.map(r => new Date(r.timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}));
-  const rtts = rows.map(r => r.rtt_ms);
-
-  const ctx = document.getElementById('historyChart').getContext('2d');
-  if (chartInstance) chartInstance.destroy();
-  chartInstance = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Latência (ms)',
-        data: rtts,
-        borderColor: '#4fb0ff',
-        backgroundColor: 'rgba(79,176,255,.12)',
-        spanGaps: true,
-        tension: .25,
-        pointRadius: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { labels: { color: '#8b96a3' } } },
-      scales: {
-        x: { ticks: { color:'#8b96a3', maxTicksLimit: 10 }, grid:{ color:'#2a3240' } },
-        y: { ticks: { color:'#8b96a3' }, grid:{ color:'#2a3240' }, title:{display:true, text:'ms', color:'#8b96a3'} }
-      }
-    }
-  });
-}
-function closeHistory(){ document.getElementById('historyOverlay').classList.remove('show'); }
 
 // ---------- Exportar ----------
-function exportReport(){
-  window.open('/api/export?hours=24', '_blank');
+function exportReport(){ window.open('/api/export?hours=24', '_blank'); }
+
+// ---------- Usuários (admin) ----------
+async function openUsers(){
+  document.getElementById('usersOverlay').classList.add('show');
+  await loadUsers();
+  await loadAuditLog();
+}
+function closeUsers(){ document.getElementById('usersOverlay').classList.remove('show'); }
+
+async function loadUsers(){
+  const res = await fetch('/api/users');
+  if (!res.ok) return;
+  const users = await res.json();
+  const tbody = document.querySelector('#usersTable tbody');
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td>${u.username}</td>
+      <td>${({admin:'Admin', operator:'Operador', readonly:'Leitura'})[u.role]}</td>
+      <td>${u.username !== me.username ? `<button class="danger-btn" onclick="deleteUser(${u.id})">Remover</button>` : ''}</td>
+    </tr>
+  `).join('');
 }
 
-loadAssets();
-connectWS();
-setInterval(loadAssets, 60000); // reforço de sincronização a cada 1 min
+async function createUser(){
+  const username = document.getElementById('newUsername').value.trim();
+  const password = document.getElementById('newPassword').value;
+  const role = document.getElementById('newRole').value;
+  if (!username || password.length < 4){ alert('Informe usuário e senha (mín. 4 caracteres).'); return; }
+  const res = await fetch('/api/users', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username, password, role})
+  });
+  const data = await res.json();
+  if (!res.ok){ alert(data.detail || 'Erro ao criar usuário'); return; }
+  document.getElementById('newUsername').value = '';
+  document.getElementById('newPassword').value = '';
+  await loadUsers();
+  await loadAuditLog();
+}
+
+async function deleteUser(id){
+  if (!confirm('Remover este usuário?')) return;
+  await fetch(`/api/users/${id}`, {method:'DELETE'});
+  await loadUsers();
+  await loadAuditLog();
+}
+
+async function loadAuditLog(){
+  const res = await fetch('/api/audit-log?limit=100');
+  if (!res.ok) return;
+  const rows = await res.json();
+  const tbody = document.querySelector('#auditTable tbody');
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${new Date(r.timestamp).toLocaleString('pt-BR')}</td>
+      <td>${r.username}</td>
+      <td>${r.action}</td>
+      <td>${r.details || ''}</td>
+    </tr>
+  `).join('');
+}
+
+boot();
+setInterval(loadEquipment, 60000);
 </script>
 </body>
 </html>
