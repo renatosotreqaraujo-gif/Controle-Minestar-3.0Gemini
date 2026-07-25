@@ -1,58 +1,106 @@
-import sqlite3
-from passlib.context import CryptContext
+"""
+Camada de banco de dados (v4).
 
-DB_PATH = "ping_monitor.db"
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+Estrutura:
+  Equipment  -> um equipamento físico (ex: CA101, um caminhão 793F)
+  Asset      -> um dos ativos de rede do equipamento (MEMS, DISPLAY, DIM/RIM/PLE, AVI LTE)
+  PingResult -> histórico de ping de um Asset
+  User       -> usuário do sistema (admin / operador / leitura)
+  AuditLog   -> log de ações importantes dos usuários
+"""
+import os
+from datetime import datetime
+from sqlalchemy import (
+    create_engine, Column, Integer, String, Float, Boolean,
+    DateTime, ForeignKey, UniqueConstraint
+)
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+from .paths import data_dir
+
+DB_PATH = os.path.join(data_dir(), "ping_tool.db")
+DATABASE_URL = f"sqlite:///{DB_PATH}"
+
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+
+class Equipment(Base):
+    __tablename__ = "equipment"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tag = Column(String(40), nullable=False, unique=True, index=True)   # ex: CA101
+    model = Column(String(80), default="")                              # ex: 793F
+    machine_type = Column(String(80), default="Outro / Não Classificado")
+    icon = Column(String(40), default="generic")
+    active = Column(Boolean, default=True)
+
+    assets = relationship("Asset", back_populates="equipment", cascade="all, delete-orphan")
+
+
+class Asset(Base):
+    __tablename__ = "assets"
+    __table_args__ = (UniqueConstraint("equipment_id", "asset_type", name="uq_equipment_asset_type"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    equipment_id = Column(Integer, ForeignKey("equipment.id"), nullable=False, index=True)
+    asset_type = Column(String(30), nullable=False)   # MEMS, DISPLAY, DIM_RIM_PLE, AVI_LTE
+    display_model = Column(String(20), nullable=True)  # G407 / G610, só quando asset_type == DISPLAY
+    ip = Column(String(45), nullable=True, index=True)
+    active = Column(Boolean, default=True)
+
+    # cache do último resultado
+    last_status = Column(Boolean, nullable=True)
+    last_rtt_ms = Column(Float, nullable=True)
+    last_checked = Column(DateTime, nullable=True)   # sempre em UTC
+    consecutive_failures = Column(Integer, default=0)
+
+    equipment = relationship("Equipment", back_populates="assets")
+    history = relationship("PingResult", back_populates="asset", cascade="all, delete-orphan")
+
+
+class PingResult(Base):
+    __tablename__ = "ping_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("assets.id"), nullable=False, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)  # UTC
+    is_alive = Column(Boolean, nullable=False)
+    rtt_ms = Column(Float, nullable=True)
+    packet_loss = Column(Float, nullable=True)
+
+    asset = relationship("Asset", back_populates="history")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(60), nullable=False, unique=True, index=True)
+    password_hash = Column(String(200), nullable=False)
+    role = Column(String(20), nullable=False, default="readonly")  # admin | operator | readonly
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)  # UTC
+    username = Column(String(60), nullable=False)
+    action = Column(String(80), nullable=False)
+    details = Column(String(400), nullable=True)
+
 
 def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Tabela de Usuários
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            hashed_password TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'viewer',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Tabela de Logs de Auditoria
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS audit_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
-            action TEXT NOT NULL,
-            details TEXT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Criar usuário Admin padrão se não existir (senha padrão: admin123)
-    cursor.execute("SELECT * FROM users WHERE username = 'admin'")
-    if not cursor.fetchone():
-        hashed_pw = pwd_context.hash("admin123")
-        cursor.execute(
-            "INSERT INTO users (username, hashed_password, role) VALUES (?, ?, ?)",
-            ("admin", hashed_pw, "admin")
-        )
-    
-    conn.commit()
-    conn.close()
+    Base.metadata.create_all(bind=engine)
 
-def log_action(username: str, action: str, details: str = None):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO audit_logs (username, action, details) VALUES (?, ?, ?)",
-        (username, action, details)
-    )
-    conn.commit()
-    conn.close()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
