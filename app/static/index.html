@@ -180,6 +180,9 @@
 <!-- ===================== TAB 1: TESTE PONTUAL ===================== -->
 <div class="tab-panel active" id="tab-pontual">
   <div class="pontual-box">
+    <label>Buscar equipamento</label>
+    <input type="text" id="pontualSearch" placeholder="Digite o tag ou modelo (ex: CA101, 793F)..." oninput="populatePontualSelect()">
+
     <label>Equipamento</label>
     <select id="pontualEquip" onchange="renderPontualAssets()"></select>
 
@@ -400,10 +403,20 @@ function updateGroupFilter(){
 function populatePontualSelect(){
   const sel = document.getElementById('pontualEquip');
   const current = sel.value;
-  sel.innerHTML = equipmentList
-    .sort((a,b) => a.tag.localeCompare(b.tag))
-    .map(e => `<option value="${e.id}">${e.tag} — ${e.model || e.machine_type}</option>`).join('');
-  if (current) sel.value = current;
+  const q = (document.getElementById('pontualSearch').value || '').toLowerCase();
+
+  const filtered = equipmentList
+    .filter(e => !q || e.tag.toLowerCase().includes(q) || (e.model||'').toLowerCase().includes(q) || e.machine_type.toLowerCase().includes(q))
+    .sort((a,b) => a.tag.localeCompare(b.tag));
+
+  if (!filtered.length){
+    sel.innerHTML = '<option value="">Nenhum equipamento encontrado</option>';
+    document.getElementById('pontualAssetList').innerHTML = '';
+    return;
+  }
+
+  sel.innerHTML = filtered.map(e => `<option value="${e.id}">${e.tag} — ${e.model || e.machine_type}</option>`).join('');
+  if (current && filtered.some(e => String(e.id) === current)) sel.value = current;
   renderPontualAssets();
 }
 
@@ -522,8 +535,8 @@ function renderGrid(){
 }
 
 function updateCounters(filteredList){
-  const allAssets = equipmentList.flatMap(e => e.assets);
-  const filtAssets = filteredList.flatMap(e => e.assets);
+  const allAssets = equipmentList.reduce((acc, e) => acc.concat(e.assets), []);
+  const filtAssets = filteredList.reduce((acc, e) => acc.concat(e.assets), []);
 
   const count = (arr) => ({
     on: arr.filter(a => a.last_status === true).length,
@@ -722,7 +735,7 @@ function openEquipmentForm(eqId){
   const assets = eq ? eq.assets : ASSET_TYPE_ORDER.map(t => ({asset_type: t, asset_label: t, ip: '', display_model: null, active: true, id: null}));
   assetBox.innerHTML = assets.map(a => `
     <div class="asset-row" style="flex-wrap:wrap;">
-      <input type="hidden" class="fa-id" value="${a.id ?? ''}">
+      <input type="hidden" class="fa-id" value="${a.id != null ? a.id : ''}">
       <input type="hidden" class="fa-type" value="${a.asset_type}">
       <span style="min-width:150px;">${a.asset_label}</span>
       <input type="text" class="fa-ip" placeholder="IP" value="${a.ip || ''}" style="width:auto; flex:1; min-width:120px;">
