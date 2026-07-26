@@ -20,7 +20,7 @@ from .ping_service import ping_batch
 from .ws_manager import manager
 from .importers import import_equipment_from_excel
 from .paths import static_dir, data_dir
-from .equipment_types import ASSET_TYPE_LABELS
+from .equipment_types import ASSET_TYPE_LABELS, ASSET_TYPES, available_types, classify_tag, icon_for_label
 from .timezone_utils import to_brasilia, now_utc
 from .monitoring import controller, CYCLE_SECONDS
 from .cmd_ping import open_cmd_ping
@@ -253,6 +253,11 @@ def list_equipment(db: Session = Depends(get_db), _: User = Depends(require_any)
     return [_serialize_equipment(e) for e in eqs]
 
 
+@app.get("/api/equipment-types")
+def list_equipment_types(_: User = Depends(require_any)):
+    return [{"label": label, "icon": icon} for label, icon in available_types()]
+
+
 class AssetUpdateIn(BaseModel):
     ip: str | None = None
     display_model: str | None = None
@@ -272,6 +277,95 @@ def update_asset(
     asset.active = data.active
     db.commit()
     log_action(db, user.username, "editar_ativo", f"{asset.equipment.tag} / {asset.asset_type}")
+    return {"ok": True}
+
+
+class EquipmentCreateIn(BaseModel):
+    tag: str
+    model: str = ""
+    machine_type: str | None = None  # se vazio, classifica automaticamente pelo TAG
+
+
+@app.post("/api/equipment")
+def create_equipment(data: EquipmentCreateIn, db: Session = Depends(get_db), user: User = Depends(require_operator_or_admin)):
+    tag = data.tag.strip().upper()
+    if not tag:
+        raise HTTPException(400, "Informe o TAG do equipamento")
+    if db.query(Equipment).filter(Equipment.tag == tag).first():
+        raise HTTPException(400, "Já existe um equipamento com esse TAG")
+
+    if data.machine_type:
+        machine_type, icon = data.machine_type, icon_for_label(data.machine_type)
+    else:
+        machine_type, icon = classify_tag(tag)
+
+    eq = Equipment(tag=tag, model=data.model.strip(), machine_type=machine_type, icon=icon)
+    db.add(eq)
+    db.flush()
+    for asset_type in ASSET_TYPES:
+        db.add(Asset(equipment_id=eq.id, asset_type=asset_type, ip=None))
+    db.commit()
+    db.refresh(eq)
+    log_action(db, user.username, "criar_equipamento", tag)
+    return _serialize_equipment(eq)
+
+
+class AssetNestedIn(BaseModel):
+    id: int
+    ip: str | None = None
+    display_model: str | None = None
+    active: bool = True
+
+
+class EquipmentUpdateIn(BaseModel):
+    tag: str
+    model: str = ""
+    machine_type: str
+    active: bool = True
+    assets: list[AssetNestedIn] = []
+
+
+@app.put("/api/equipment/{equipment_id}")
+def update_equipment(
+    equipment_id: int, data: EquipmentUpdateIn, db: Session = Depends(get_db),
+    user: User = Depends(require_operator_or_admin),
+):
+    eq = db.query(Equipment).get(equipment_id)
+    if not eq:
+        raise HTTPException(404, "Equipamento não encontrado")
+
+    new_tag = data.tag.strip().upper()
+    if new_tag != eq.tag and db.query(Equipment).filter(Equipment.tag == new_tag).first():
+        raise HTTPException(400, "Já existe um equipamento com esse TAG")
+
+    eq.tag = new_tag
+    eq.model = data.model.strip()
+    eq.machine_type = data.machine_type
+    eq.icon = icon_for_label(data.machine_type)
+    eq.active = data.active
+
+    for a in data.assets:
+        asset = db.query(Asset).filter(Asset.id == a.id, Asset.equipment_id == eq.id).first()
+        if asset:
+            asset.ip = a.ip
+            asset.display_model = a.display_model
+            asset.active = a.active
+
+    db.commit()
+    db.refresh(eq)
+    log_action(db, user.username, "editar_equipamento", eq.tag)
+    return _serialize_equipment(eq)
+
+
+@app.delete("/api/equipment/{equipment_id}")
+def delete_equipment(equipment_id: int, db: Session = Depends(get_db), user: User = Depends(require_operator_or_admin)):
+    eq = db.query(Equipment).get(equipment_id)
+    if not eq:
+        raise HTTPException(404, "Equipamento não encontrado")
+    tag = eq.tag
+    db.delete(eq)
+    db.commit()
+    log_action(db, user.username, "remover_equipamento", tag)
     return {"ok": True}
 
 
