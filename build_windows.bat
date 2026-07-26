@@ -29,6 +29,8 @@ pyinstaller --onefile --name PingMonitor ^
   --hidden-import uvicorn.protocols.websockets.auto ^
   --hidden-import uvicorn.lifespan ^
   --hidden-import uvicorn.lifespan.on ^
+  --hidden-import passlib.handlers.bcrypt ^
+  --collect-submodules passlib ^
   run.py
 
 echo.
