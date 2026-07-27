@@ -1,597 +1,94 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ping Monitor — Sotreq CAT</title>
-<!-- Nota: Chart.js e icons.js mantidos como dependências externas -->
-<script src="/static/vendor/chart.umd.js"></script>
-<script src="/static/icons.js"></script>
-<style>
-  /* ============================================================
-     DOCUMENTAÇÃO CSS: Identidade Visual e Variáveis
-     ============================================================ */
-  :root{
-    /* Cores Oficiais CAT / Sotreq */
-    --cat-yellow: #FFCC11;
-    --cat-yellow-hover: #FFE066;
-    --cat-yellow-dim: #cfa30d;
-    
-    /* Cores de Fundo e Painéis (Escala de Cinza Escuro) */
-    --bg-main: #000000;       /* Fundo total da tela */
-    --bg-panel: #111111;     /* Fundo das caixas principais */
-    --bg-input: #050505;     /* Fundo de campos de texto/select */
-    
-    /* Cores de Linha e Bordas */
-    --line-soft: #222222;
-    --line-hard: #333333;
-    
-    /* Cores de Texto */
-    --text-main: #F2F2F0;
-    --text-muted: #9A9A94;
-    --text-on-yellow: #161200;
-    
-    /* Cores de Status */
-    --status-online: #34d67f;
-    --status-offline: #ef4a52;
-    
-    /* Fontes */
-    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-    --font-mono: ui-monospace, SFMono-Regular, Consolas, "Roboto Mono", monospace;
-
-    /* Sombras e Efeitos */
-    --shadow-panel: 0 10px 30px rgba(0,0,0,0.5);
-    --border-radius-lg: 14px;
-    --border-radius-md: 8px;
-  }
-
-  *{box-sizing:border-box;}
-
-  body{ 
-    margin:0; 
-    background:var(--bg-main); 
-    color:var(--text-main); 
-    font-family:var(--font-ui); 
-    min-height:100vh; 
-    display: flex;
-    flex-direction: column;
-  }
-
-  button{ font-family:var(--font-ui); cursor:pointer; transition: 0.15s ease-in-out; }
-
-  /* ---------- Header (Estilo Black CAT) ---------- */
-  header{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:16px 26px; border-bottom:3px solid var(--cat-yellow);
-    background:#000; position:sticky; top:0; z-index:30;
-  }
-  .brand{ display:flex; align-items:center; gap:12px; }
-  .brand .bar{ width:6px; height:28px; background:var(--cat-yellow); border-radius:2px; }
-  .brand h1{ margin:0; font-size:20px; font-weight:800; letter-spacing: -0.5px;}
-  .brand .sub{ font-size:11px; color:var(--text-muted); letter-spacing:.1em; text-transform:uppercase; margin-top: 2px;}
-
-  .user-box{ display:flex; align-items:center; gap:12px; font-size:13px; }
-  .role-pill{
-    font-family:var(--font-mono); font-size:10px; padding:4px 10px; border-radius:20px;
-    background:var(--cat-yellow); color:var(--text-on-yellow); font-weight:700; text-transform:uppercase;
-  }
-  
-  /* Botões Fantasma (Borda) */
-  .ghost-btn{
-    background:transparent; border:1px solid var(--line-hard); color:var(--text-main);
-    padding:8px 14px; border-radius:var(--border-radius-md); font-size:12.5px;
-  }
-  .ghost-btn:hover{ border-color:var(--cat-yellow); color:var(--cat-yellow); }
-
-  /* ---------- Navegação por Abas (Tabs) ---------- */
-  .tabs{ display:flex; gap:2px; padding:0 26px; background:#000; border-bottom:1px solid var(--line-soft); }
-  .tab-btn{
-    background:transparent; border:none; color:var(--text-muted); padding:14px 20px; font-size:14px;
-    font-weight:600; border-bottom:3px solid transparent; transition:.15s;
-  }
-  .tab-btn.active{ color:var(--cat-yellow); border-bottom-color:var(--cat-yellow); }
-  .tab-btn:hover{ color:var(--text-main); }
-
-  /* Container Principal do Conteúdo */
-  main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding: 20px 26px 40px;
-  }
-
-  .tab-panel{ display:none; flex: 1; }
-  .tab-panel.active{ display:flex; flex-direction: column; }
-
-  /* ============================================================
-     ESTILOS ESPECÍFICOS DA ABA 1: Diagnóstico Rápido
-     ============================================================ */
-  
-  /* Centralização da Caixa de Diagnóstico */
-  #tab-pontual {
-    justify-content: center; /* Centraliza verticalmente no main */
-    align-items: center;     /* Centraliza horizontalmente no main */
-  }
-
-  /* A Caixa de Diagnóstico Recriada */
-  .pontual-box{
-    background:var(--bg-panel); 
-    border:1px solid var(--line-hard); 
-    border-radius:var(--border-radius-lg); 
-    padding:30px;
-    width:100%;
-    max-width:680px; /* Um pouco mais larga para o novo layout */
-    box-shadow: var(--shadow-panel);
-    display: flex;
-    flex-direction: column;
-    gap: 16px; /* Espaçamento uniforme entre elementos */
-  }
-
-  .pontual-box h2 {
-    margin: 0 0 10px 0;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--cat-yellow);
-    text-align: center;
-  }
-
-  /* Estilização de Labels e Inputs */
-  .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .form-group label{ 
-    font-size:12px; 
-    color:var(--text-muted); 
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  /* Inputs, Selects e Busca centralizada */
-  select, input[type=text]{
-    background:var(--bg-input); 
-    border:1px solid var(--line-hard); 
-    color:var(--text-main);
-    padding:12px 16px; 
-    border-radius:var(--border-radius-md); 
-    font-size:14px; 
-    width:100%; 
-    font-family:var(--font-ui);
-    transition: 0.15s;
-  }
-  
-  select:focus, input[type=text]:focus {
-    outline: none;
-    border-color: var(--cat-yellow);
-    box-shadow: 0 0 0 3px rgba(255, 204, 17, 0.1);
-  }
-
-  /* Centralização específica da caixa de busca */
-  #pontualSearch {
-    text-align: center; /* Texto de busca centralizado */
-    font-size: 15px;
-    border-color: var(--line-hard);
-  }
-
-  /* Lista de Ativos (Checkboxes) */
-  .asset-list{ 
-    display:grid; 
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap:10px; 
-    margin-top:10px; 
-  }
-  
-  .asset-row{
-    display:flex; align-items:center; gap:12px; 
-    background:var(--bg-input); 
-    border:1px solid var(--line-soft);
-    border-radius:var(--border-radius-md); 
-    padding:12px 16px; 
-    font-size:13.5px;
-    cursor: pointer;
-    transition: 0.15s;
-  }
-  
-  .asset-row:hover:not(.disabled){
-    border-color: var(--line-hard);
-    background: #080808;
-  }
-
-  .asset-row.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  /* Estilo do Checkbox Nativo */
-  .asset-row input[type=checkbox] {
-    accents-color: var(--cat-yellow); /* Cor do check em browsers modernos */
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-  }
-
-  .asset-row .ip{ 
-    font-family:var(--font-mono); 
-    color:var(--text-muted); 
-    margin-left:auto; /* Empurra o IP para a direita */
-    font-size: 12px;
-  }
-
-  /* Modo de Teste (Radio Buttons) */
-  .mode-row{ 
-    display:flex; 
-    justify-content: center;
-    gap:24px; 
-    margin: 10px 0;
-    font-size:13px; 
-    background: var(--bg-input);
-    padding: 10px;
-    border-radius: var(--border-radius-md);
-    border: 1px solid var(--line-soft);
-  }
-  
-  .mode-row label{ 
-    display:flex; align-items:center; gap:8px; 
-    margin:0; color:var(--text-main); 
-    cursor: pointer;
-  }
-
-  /* Área de Botões Principais */
-  .action-row {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-  }
-
-  /* Botão Primário CAT (Amarelo) */
-  .primary-btn{
-    flex: 1; /* Ocupa espaço disponível */
-    background:var(--cat-yellow); 
-    color:var(--text-on-yellow); 
-    border:none; 
-    padding:14px 20px; 
-    border-radius:var(--border-radius-md);
-    font-weight:750; 
-    font-size:14px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .primary-btn:hover{ background: var(--cat-yellow-hover); }
-  .primary-btn:active{ transform: scale(0.98); }
-
-  /* Botão de Perigo (Fechar/Parar) */
-  .danger-btn{
-    background: transparent;
-    border: 2px solid var(--status-offline);
-    color: var(--status-offline);
-    padding:14px 20px; 
-    border-radius:var(--border-radius-md);
-    font-weight:700; 
-    font-size:14px;
-    text-transform: uppercase;
-  }
-  .danger-btn:hover{ background: var(--status-offline); color: white; }
-
-  /* Nota de rodapé */
-  .cmd-note{ 
-    font-size:12px; 
-    color:var(--text-muted); 
-    text-align: center;
-    margin-top:5px;
-    line-height: 1.4;
-  }
-
-  /* ============================================================
-     DOCUMENTAÇÃO: Estilos mantidos das outras abas (para contexto)
-     ============================================================ */
-  /* (Estilos da Tab 2, 3, 4 e Modais simplificados aqui para brevidade) */
-  .overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.8); display:none; align-items:center; justify-content:center; z-index:50; padding:20px; backdrop-filter: blur(4px); }
-  .overlay.show{ display:flex; }
-  .modal{ background:var(--bg-panel); border:1px solid var(--line-hard); border-radius:var(--border-radius-lg); padding:26px; width:100%; max-width:460px; box-shadow: var(--shadow-panel); }
-  .modal.wide{ max-width:800px; }
-  .modal h2{ margin:0 0 20px; font-size:18px; color: var(--cat-yellow); }
-  
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  th, td{ text-align:left; padding:10px 12px; border-bottom:1px solid var(--line-soft); }
-  th{ color:var(--text-muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing: 0.5px; }
-
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Diagnóstico - Sotreq CAT</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+    <script src="icons.js" defer></script>
+    <script src="script.js" defer></script>
 </head>
 <body>
-
-<header>
-  <div class="brand">
-    <div class="bar"></div>
-    <div>
-      <h1>Ping Monitor</h1>
-      <div class="sub">Sotreq CAT · Automação Mina</div>
-    </div>
-  </div>
-  <div class="user-box">
-    <span id="userLabel">Carregando...</span>
-    <span class="role-pill" id="roleLabel">-</span>
-    <button class="ghost-btn" onclick="logout()">Sair</button>
-  </div>
-</header>
-
-<div class="tabs">
-  <!-- Botões das abas com IDs para manipulação JS -->
-  <button class="tab-btn active" id="tabBtn-pontual" onclick="switchTab('pontual')">1 · Diagnóstico Rápido</button>
-  <button class="tab-btn" id="tabBtn-monitor" onclick="switchTab('monitor')">2 · Monitoramento</button>
-  <button class="tab-btn" id="tabBtn-cadastro" onclick="switchTab('cadastro')">3 · Cadastro</button>
-  <button class="tab-btn" id="tabBtn-usuarios" style="display:none;" onclick="switchTab('usuarios')">4 · Usuários</button>
-</div>
-
-<main>
-  <!-- ===================== TAB 1: DIAGNÓSTICO RÁPIDO (RECRIADA) ===================== -->
-  <!-- A classe 'active' e o flex layout são controlados pelo CSS e JS -->
-  <div class="tab-panel active" id="tab-pontual">
-    <div class="pontual-box">
-      <h2>Teste de Ping Instantâneo</h2>
-
-      <!-- Grupo 1: Busca Centralizada -->
-      <div class="form-group">
-        <label for="pontualSearch">1. Buscar Equipamento (Tag ou Modelo)</label>
-        <!-- text-align: center aplicado via CSS neste ID -->
-        <input type="text" id="pontualSearch" placeholder="🔍 Digite ex: CA101 ou 793F..." oninput="populatePontualSelect()">
-      </div>
-
-      <!-- Grupo 2: Seleção -->
-      <div class="form-group">
-        <label for="pontualEquip">2. Selecionar da Lista Filtrada</label>
-        <select id="pontualEquip" onchange="renderPontualAssets()"></select>
-      </div>
-
-      <!-- Grupo 3: Ativos (Gerado dinamicamente pelo JS) -->
-      <div class="form-group">
-        <label>3. Escolher Ativos para Testar</label>
-        <div class="asset-list" id="pontualAssetList">
-          <!-- Exemplo de como o JS gera este conteúdo:
-          <label class="asset-row disabled">
-            <input type="checkbox" disabled>
-            MEMS
-            <span class="ip">sem IP cadastrado</span>
-          </label>
-          <label class="asset-row">
-            <input type="checkbox" class="pontual-asset-cb" value="10">
-            Display (G407/G610)
-            <span class="ip">10.1.2.3</span>
-          </label>
-          -->
-          <div class="cmd-note" style="grid-column: 1/-1;">Selecione um equipamento acima.</div>
+    <header class="navbar">
+        <div class="logo-container">
+            <div class="cat-logo">CAT</div>
+            <span class="system-title">Sotreq | Telemetria & Diagnóstico Real-Time</span>
         </div>
-      </div>
-
-      <!-- Grupo 4: Modo -->
-      <div class="form-group">
-        <label>4. Modo de Execução</label>
-        <div class="mode-row">
-          <label><input type="radio" name="pontualMode" value="pontual" checked> Pontual (4 pacotes)</label>
-          <label><input type="radio" name="pontualMode" value="continuo"> Contínuo (até parar)</label>
+        <div class="connection-status">
+            <span class="status-dot disconnected" id="statusDot"></span>
+            <span id="statusText">Desconectado</span>
         </div>
-      </div>
+    </header>
 
-      <!-- Grupo 5: Ações (Botões Iniciar e o NOVO botão Fechar) -->
-      <div class="action-row">
-        <!-- Mudámos o texto para refletir a nova lógica interna -->
-        <button class="primary-btn" id="btnIniciarTeste" onclick="runInstantPing()">▶ Iniciar Teste</button>
-        <!-- NOVO BOTÃO: Inicialmente escondido, aparece quando o teste corre -->
-        <button class="danger-btn" id="btnPararTeste" style="display:none;" onclick="stopInstantPing()">🛑 Parar / Fechar</button>
-      </div>
-      
-      <div class="cmd-note">
-        O teste roda diretamente no navegador. Não abriremos janelas de CMD externas.<br>
-        <strong>Utilização:</strong> Selecione os ativos e clique em Iniciar. Use Parar para encerrar pings contínuos.
-      </div>
+    <main class="dashboard-container">
+        <!-- Sidebar de Ativos / Máquinas -->
+        <aside class="sidebar">
+            <h2>Ativos Monitorados</h2>
+            <div class="search-box">
+                <input type="text" id="assetSearch" placeholder="Filtrar frota..." onkeyup="filterAssets()">
+            </div>
+            <ul class="asset-list" id="assetList">
+                <li class="asset-item active" onclick="selectAsset('CAT-797F-01')">
+                    <span class="asset-icon" id="icon-797F"></span>
+                    <div class="asset-info">
+                        <strong>Caminhão 797F #01</strong>
+                        <small>S11D - Serra Sul</small>
+                    </div>
+                </li>
+                <li class="asset-item" onclick="selectAsset('CAT-6060-02')">
+                    <span class="asset-icon" id="icon-6060"></span>
+                    <div class="asset-info">
+                        <strong>Escavadeira 6060 #02</strong>
+                        <small>S11D - Serra Sul</small>
+                    </div>
+                </li>
+            </ul>
+        </aside>
 
-    </div>
-  </div>
+        <!-- Painel Principal -->
+        <section class="content-area">
+            <div class="action-bar">
+                <h1 id="selectedAssetTitle">Ativo: CAT-797F-01</h1>
+                <button class="btn btn-primary" onclick="toggleTerminal()">
+                    <span class="btn-icon">&gt;_</span> Abrir Terminal Diagnóstico (CMD)
+                </button>
+            </div>
 
-  <!-- ===================== MANTENDO ESTRUTURA DAS OUTRAS ABAS (SEM ALTERAR DESIGN) ===================== -->
-  <!-- Apenas simplificado para focar na Aba 1 -->
-  
-  <div class="tab-panel" id="tab-monitor">
-    <div class="empty">Área de Monitoramento (Design mantido).</div>
-  </div>
+            <!-- Gráficos e Telemetria -->
+            <div class="grid-cards">
+                <div class="card">
+                    <h3>Temperatura do Motor (°C)</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="tempChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Pressão Hidráulica (PSI)</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="pressureChart"></canvas>
+                    </div>
+                </div>
+            </div>
 
-  <div class="tab-panel" id="tab-cadastro">
-    <div class="empty">Área de Cadastro (Design mantido).</div>
-  </div>
-
-  <div class="tab-panel" id="tab-usuarios">
-    <div class="empty">Área de Usuários (Design mantido).</div>
-  </div>
-
-</main>
-
-<!-- Overlays/Modais mantidos -->
-<div class="overlay" id="historyOverlay"> ... </div>
-<div class="overlay" id="importOverlay"> ... </div>
-<div class="overlay" id="equipDetailOverlay"> ... </div>
-
-<script>
-/* ============================================================
-   DOCUMENTAÇÃO JS: Instruções de Implementação
-   ============================================================ */
-
-// 1. Variáveis globais existentes (MANTIDAS)
-let me = null;
-let equipmentList = [];
-let equipmentMap = {};
-let assetIndex = {};
-let chartInstance = null;
-let equipmentTypes = [];
-let detailEquipId = null;
-const ASSET_TYPE_ORDER = ['MEMS', 'DISPLAY', 'DIM_RIM_PLE', 'AVI_LTE'];
-
-// 2. Variável para controlar o WebSocket do novo Ping Instantâneo
-let instantPingWS = null;
-
-// 3. Função Boot (MANTIDA, com pequeno ajuste de UI)
-async function boot(){
-  try {
-    const res = await fetch('/api/me');
-    if (!res.ok){ window.location.href = '/login'; return; }
-    me = await res.json();
-    document.getElementById('userLabel').textContent = me.username;
-    document.getElementById('roleLabel').textContent = ({admin:'Admin', operator:'Operador', readonly:'Leitura'})[me.role];
-    if (me.role === 'admin') document.getElementById('tabBtn-usuarios').style.display = 'inline-block';
-
-    const typesRes = await fetch('/api/equipment-types');
-    equipmentTypes = await typesRes.json();
-
-    await loadEquipment();
-    // connectWS(); // WebSocket geral do monitoramento (Tab 2)
-    
-    // refreshMonitoringStatus(); // Tab 2
-    // setInterval(refreshMonitoringStatus, 15000); // Tab 2
-  } catch (error) {
-    console.error("Erro no boot:", error);
-  }
-}
-
-// 4. Função Logout (MANTIDA)
-async function logout(){
-  await fetch('/api/logout', {method:'POST'});
-  window.location.href = '/login';
-}
-
-// 5. Função SwitchTab (AJUSTADA para o novo layout CSS flex)
-function switchTab(name){
-  // Desativa todos os botões e painéis
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-
-  // Ativa o botão e painel selecionado
-  document.getElementById('tabBtn-' + name).classList.add('active');
-  const panel = document.getElementById('tab-' + name);
-  panel.classList.add('active');
-
-  // Lógica específica de carregamento de dados (MANTIDA)
-  if (name === 'monitor') { /* renderGrid(); */ }
-  if (name === 'cadastro') { /* renderCadastroList(); */ }
-  if (name === 'usuarios'){ /* loadUsers(); loadAuditLog(); */ }
-}
-
-// --- FUNÇÕES DE DADOS (MANTIDAS, apenas para o Select funcionar na Tab 1) ---
-
-async function loadEquipment(){
-  try {
-    const res = await fetch('/api/equipment');
-    equipmentList = await res.json();
-    equipmentMap = {};
-    assetIndex = {};
-    equipmentList.forEach(eq => {
-      equipmentMap[eq.id] = eq;
-      eq.assets.forEach(a => { assetIndex[a.id] = {equipmentId: eq.id, assetType: a.asset_type}; });
-    });
-    // updateGroupFilter(); // Tab 2
-    populatePontualSelect(); // Tab 1
-    // renderGrid(); // Tab 2
-  } catch (e) { console.error("Erro loadEquipment:", e); }
-}
-
-// --- LOGICA DA TAB 1: DIAGNÓSTICO RÁPIDO (AJUSTADA) ---
-
-// Popula o Select (Dropdown) baseado na busca centralizada (AJUSTADA para o novo design)
-function populatePontualSelect(){
-  const sel = document.getElementById('pontualEquip');
-  const current = sel.value;
-  const q = (document.getElementById('pontualSearch').value || '').toLowerCase();
-  const assetListDiv = document.getElementById('pontualAssetList');
-
-  const filtered = equipmentList
-    .filter(e => e.active && (!q || e.tag.toLowerCase().includes(q) || (e.model||'').toLowerCase().includes(q) || e.machine_type.toLowerCase().includes(q)))
-    .sort((a,b) => a.tag.localeCompare(b.tag));
-
-  if (!filtered.length){
-    sel.innerHTML = '<option value="">Nenhum equipamento ativo encontrado</option>';
-    assetListDiv.innerHTML = '<div class="cmd-note" style="grid-column: 1/-1;">Sem resultados para a busca.</div>';
-    return;
-  }
-
-  // Novo formato de label no option
-  sel.innerHTML = filtered.map(e => `<option value="${e.id}">${e.tag} — ${e.model || e.machine_type}</option>`).join('');
-  
-  // Tenta manter a seleção anterior se ela ainda existir na lista filtrada
-  if (current && filtered.some(e => String(e.id) === current)) {
-    sel.value = current;
-  } else {
-    // Se não, seleciona o primeiro e força o render dos ativos
-    if(filtered.length > 0) renderPontualAssets();
-  }
-}
-
-// Renderiza os checkboxes dos ativos (AJUSTADA para o novo design CSS)
-function renderPontualAssets(){
-  const eqId = parseInt(document.getElementById('pontualEquip').value);
-  const eq = equipmentMap[eqId];
-  const box = document.getElementById('pontualAssetList');
-  if (!eq){ box.innerHTML = '<div class="cmd-note" style="grid-column: 1/-1;">Selecione um equipamento.</div>'; return; }
-  
-  if(!eq.assets || eq.assets.length === 0) {
-     box.innerHTML = '<div class="cmd-note" style="grid-column: 1/-1;">Nenhum ativo cadastrado para este equipamento.</div>';
-     return;
-  }
-
-  box.innerHTML = eq.assets.map(a => {
-    const hasIp = a.ip && a.ip.trim() !== "";
-    // Adiciona classe 'disabled' no label e desabilita o checkbox se não tiver IP
-    return `
-    <label class="asset-row ${hasIp ? '' : 'disabled'}">
-      <input type="checkbox" class="pontual-asset-cb" value="${a.id}" ${hasIp ? '' : 'disabled'}>
-      ${a.asset_label}
-      <span class="ip">${hasIp ? a.ip : 'sem IP cadastrado'}</span>
-    </label>
-  `}).join('');
-}
-
-// --- NOVA LÓGICA DE PING (WEB SOCKET - Placeholder para próxima etapa) ---
-
-// Função que substitui a 'runCmdPing' antiga
-async function runInstantPing(){
-  const checked = [...document.querySelectorAll('.pontual-asset-cb:checked')];
-  if (!checked.length){ alert('Por favor, selecione ao menos um ativo com IP válido para testar.'); return; }
-  
-  const mode = document.querySelector('input[name=pontualMode]:checked').value;
-  const isContinuous = mode === 'continuo';
-
-  // UI: Alternar botões
-  document.getElementById('btnIniciarTeste').style.display = 'none';
-  document.getElementById('btnPararTeste').style.display = 'inline-block';
-  
-  // TODO: Implementar lógica do WebSocket na próxima etapa
-  alert(`ESTA É UMA DEMONSTRAÇÃO DO DESIGN.\n\nNa próxima etapa, implementaremos o WebSocket para testar os ${checked.length} ativos selecionados no modo ${mode}.\n\nA saída do ping aparecerá aqui na página em tempo real e o botão 'Parar' funcionará.`);
-  
-  // Simulação de fim de teste (se for pontual)
-  if(!isContinuous) {
-    setTimeout(stopInstantPing, 3000);
-  }
-}
-
-// NOVA FUNÇÃO: Para fechar/parar o teste (o botão de 'Fechar CMD' que pediste)
-function stopInstantPing(){
-  console.log("Parando teste de ping instantâneo...");
-  
-  // 1. TODO: Enviar sinal de paragem via WebSocket se estiver aberto e fechá-lo
-  if(instantPingWS) {
-    // instantPingWS.send(JSON.stringify({action: 'stop'}));
-    // instantPingWS.close();
-    instantPingWS = null;
-  }
-
-  // 2. UI: Alternar botões de volta
-  document.getElementById('btnIniciarTeste').style.display = 'inline-block';
-  document.getElementById('btnPararTeste').style.display = 'none';
-  
-  // 3. TODO: Limpar área de console (que adicionaremos na próxima etapa)
-}
-
-// Iniciar
-boot();
-</script>
+            <!-- Janela do Terminal CMD Integrada -->
+            <div id="cmdTerminal" class="cmd-container hidden">
+                <div class="cmd-header">
+                    <span class="cmd-title">Sotreq Diagnostic Shell v2.4 - [CAT-797F-01]</span>
+                    <button class="cmd-close-btn" onclick="toggleTerminal()" title="Fechar Terminal">&times;</button>
+                </div>
+                <div class="cmd-body" id="cmdBody">
+                    <p class="cmd-line">Sotreq Diagnostics CLI [Versão 10.0.19045.3803]</p>
+                    <p class="cmd-line">(c) Sotreq Corporation. Todos os direitos reservados.</p>
+                    <p class="cmd-line">&nbsp;</p>
+                    <p class="cmd-line">Digite <span class="highlight">'help'</span> para listar os comandos de diagnóstico disponíveis.</p>
+                </div>
+                <div class="cmd-footer">
+                    <span class="cmd-prompt">C:\Sotreq\Diagnostics&gt;</span>
+                    <input type="text" id="cmdInput" class="cmd-input" autofocus autocomplete="off" onkeydown="handleCmdInput(event)">
+                </div>
+            </div>
+        </section>
+    </main>
 </body>
 </html>
