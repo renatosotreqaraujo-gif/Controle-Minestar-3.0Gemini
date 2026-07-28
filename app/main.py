@@ -1,89 +1,163 @@
-import asyncio
 import sys
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import os
+from fastapi import FastAPI, Depends, HTTPException, status, WebSocket
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional
 
-# Garantir que a instância da aplicação FastAPI existe
-app = FastAPI()
+# Importações dos seus módulos internos
+import auth
+import database
+import ping_service
+import ws_manager
 
-@app.websocket("/ws/instant-ping")
-async def websocket_instant_ping(websocket: WebSocket):
-    """
-    Rota WebSocket para execução do comando PING em tempo real.
-    Lê a saída do terminal do SO e transmite ao navegador,
-    permitindo o encerramento do processo a qualquer momento.
-    """
-    await websocket.accept()
-    ping_process = None
+# --- TRATAMENTO PARA PYINSTALLER (.EXE) ---
+# Evita erros de stdout/stderr nulos ao rodar como executável
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w')
 
-    try:
-        # 1. Receber os parâmetros enviados pelo JavaScript
-        data = await websocket.receive_json()
-        ip = data.get("ip")
-        mode = data.get("mode")  # 'pontual' ou 'continuo'
+# Determina o diretório base (funciona tanto em script quanto empacotado pelo PyInstaller)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-        if not ip:
-            await websocket.send_text("Erro: Nenhum IP foi fornecido.")
-            await websocket.close()
-            return
+# --- INICIALIZAÇÃO DA APLICAÇÃO FASTAPI ---
+app = FastAPI(
+    title="Sotreq CAT - Ping & Telemetry Monitor",
+    description="Painel de Monitoramento e Diagnóstico com Suporte a CLI/CMD",
+    version="3.0.0"
+)
 
-        # 2. Definir o comando com base no SO (Windows vs Linux/Mac)
-        is_windows = sys.platform.startswith("win")
-        
-        if is_windows:
-            # No Windows: -t (contínuo), -n 4 (pontual de 4 pacotes)
-            args = ["ping", ip, "-t"] if mode == "continuo" else ["ping", ip, "-n", "4"]
-        else:
-            # No Linux/Mac: sem parâmetro de contagem (contínuo), -c 4 (pontual)
-            args = ["ping", ip] if mode == "continuo" else ["ping", ip, "-c", "4"]
+# Configuração de CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-        # 3. Criar o processo do PING em plano de fundo sem abrir janela CMD
-        ping_process = await asyncio.create_subprocess_exec(
-            *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT
+# --- INICIALIZAÇÃO DO BANCO DE DADOS ---
+@app.on_event("startup")
+async def startup_db_client():
+    database.init_db()
+
+# --- ARQUIVOS ESTÁTICOS E ROTAS PRINCIPAIS ---
+if os.path.exists(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+@app.get("/", response_class=FileResponse)
+async def serve_index():
+    """Servidor da página principal do Dashboard (index.html)."""
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    raise HTTPException(status_code=404, detail="Arquivo index.html não encontrado em app/static/")
+
+@app.get("/login", response_class=FileResponse)
+async def serve_login():
+    """Servidor da página de Login (login.html)."""
+    login_path = os.path.join(STATIC_DIR, "login.html")
+    if os.path.exists(login_path):
+        return FileResponse(login_path)
+    raise HTTPException(status_code=404, detail="Arquivo login.html não encontrado em app/static/")
+
+# --- MODELOS DE DADOS (PYDANTIC) ---
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class UserCreateRequest(BaseModel):
+    username: str
+    password: str
+    role: str  # admin, operator, viewer
+
+class PingRequest(BaseModel):
+    host: str
+
+# --- ENDPOINTS DE AUTENTICAÇÃO ---
+@app.post("/api/login")
+async def login(data: LoginRequest):
+    user = database.verify_user(data.username, data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário ou senha incorretos."
         )
+    
+    token = auth.create_access_token({"sub": user["username"], "role": user["role"]})
+    database.log_audit(user["username"], "LOGIN", "Usuário autenticado com sucesso")
+    
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "username": user["username"],
+        "role": user["role"]
+    }
 
-        # 4. Task assíncrona para escutar o comando "stop" vindo do botão Fechar
-        async def listen_cancel():
-            try:
-                while True:
-                    msg = await websocket.receive_json()
-                    if msg.get("action") == "stop" and ping_process:
-                        ping_process.kill()
-                        break
-            except Exception:
-                pass
+@app.post("/api/logout")
+async def logout(current_user: dict = Depends(auth.get_current_user)):
+    database.log_audit(current_user["username"], "LOGOUT", "Sessão encerrada")
+    return {"message": "Logout realizado com sucesso."}
 
-        cancel_task = asyncio.create_task(listen_cancel())
+# --- ENDPOINTS ADMINISTRATIVOS ---
+@app.post("/api/users/create")
+async def create_user(
+    data: UserCreateRequest,
+    current_user: dict = Depends(auth.require_role("admin"))
+):
+    success = database.create_user(data.username, data.password, data.role)
+    if not success:
+        raise HTTPException(status_code=400, detail="Usuário já existe.")
+    
+    database.log_audit(current_user["username"], "CREATE_USER", f"Criou usuário: {data.username} ({data.role})")
+    return {"message": f"Usuário {data.username} criado com sucesso."}
 
-        # 5. Ler a saída do PING linha por linha e enviar ao navegador
+@app.get("/api/audit-logs")
+async def get_audit_logs(current_user: dict = Depends(auth.require_role("admin"))):
+    return database.get_audit_logs()
+
+# --- ENDPOINTS DE OPERAÇÃO E DIAGNÓSTICO ---
+@app.post("/api/ping")
+async def execute_ping(
+    data: PingRequest,
+    current_user: dict = Depends(auth.get_current_user)
+):
+    """Executa o comando de ping no backend para o terminal diagnóstico."""
+    result = ping_service.run_ping(data.host)
+    database.log_audit(current_user["username"], "PING_EXECUTE", f"Host testado: {data.host}")
+    return result
+
+@app.get("/api/status")
+async def get_system_status():
+    return {
+        "status": "online",
+        "version": "3.0.0-S11D",
+        "active_monitors": ping_service.get_active_monitors_count()
+    }
+
+# --- WEBSOCKET PARA TELEMETRIA EM TEMPO REAL ---
+@app.websocket("/ws/telemetry")
+async def websocket_telemetry(websocket: WebSocket):
+    await ws_manager.connect(websocket)
+    try:
         while True:
-            line = await ping_process.stdout.readline()
-            if not line:
-                break
-            
-            # Decodificar texto (CP1252 no Windows para acentuação correta do CMD)
-            text = line.decode('cp1252' if is_windows else 'utf-8', errors='replace')
-            await websocket.send_text(text)
+            data = await websocket.receive_text()
+            # Processa mensagens/comandos via WebSocket se necessário
+            await ws_manager.broadcast(f"Eco: {data}")
+    except Exception:
+        ws_manager.disconnect(websocket)
 
-        cancel_task.cancel()
-        await websocket.send_text("\n--- Teste Encerrado ---")
-
-    except WebSocketDisconnect:
-        # Se o utilizador fechar a página/aba, garante a eliminação do processo
-        if ping_process:
-            ping_process.kill()
-    except Exception as e:
-        await websocket.send_text(f"\nErro no processamento: {str(e)}")
-    finally:
-        # Garantia final de liberação do processo do sistema
-        if ping_process and ping_process.returncode is None:
-            try:
-                ping_process.kill()
-            except ProcessLookupError:
-                pass
-        
-        try:
-            await websocket.close()
-        except Exception:
-            pass
+# --- EXECUÇÃO DIRETA COM UVICORN ---
+if __name__ == "__main__":
+    import uvicorn
+    print("==================================================")
+    print(" PING MONITOR & DIAGNOSTIC SYSTEM")
+    print(" Painel disponível em: http://localhost:8000")
+    print(" Outros PCs da rede acessam via http://<IP-DESTE-PC>:8000")
+    print(" Não feche esta janela enquanto quiser usar o painel.")
+    print("==================================================")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
