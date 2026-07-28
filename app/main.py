@@ -7,20 +7,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 
-# Importações dos seus módulos internos
-import auth
-import database
-import ping_service
-import ws_manager
+# --- CORREÇÃO DOS IMPORTS (Suporta app/main.py e PyInstaller) ---
+try:
+    # Tenta importar via pacote `app`
+    from app import auth, database, ping_service, ws_manager
+except ModuleNotFoundError:
+    # Fallback para caso esteja rodando na mesma pasta do script
+    import auth
+    import database
+    import ping_service
+    import ws_manager
 
 # --- TRATAMENTO PARA PYINSTALLER (.EXE) ---
-# Evita erros de stdout/stderr nulos ao rodar como executável
 if sys.stdout is None:
     sys.stdout = open(os.devnull, 'w')
 if sys.stderr is None:
     sys.stderr = open(os.devnull, 'w')
 
-# Determina o diretório base (funciona tanto em script quanto empacotado pelo PyInstaller)
+# Determina o diretório base
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
@@ -146,7 +150,6 @@ async def websocket_telemetry(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            # Processa mensagens/comandos via WebSocket se necessário
             await ws_manager.broadcast(f"Eco: {data}")
     except Exception:
         ws_manager.disconnect(websocket)
