@@ -4,10 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitor Diagnóstico - Sotreq CAT</title>
-    <link rel="stylesheet" href="styles.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
-    <script src="icons.js" defer></script>
-    <script src="script.js" defer></script>
+    
+    <!-- CSS principal da aplicação -->
+    <link rel="stylesheet" href="/static/styles.css">
+    
+    <!-- Scripts e dependências locais -->
+    <script src="/static/vendor/chart.umd.js"></script>
+    <script src="/static/icons.js" defer></script>
+    <script src="/static/script.js" defer></script>
 </head>
 <body>
     <header class="navbar">
@@ -71,7 +75,7 @@
                 </div>
             </div>
 
-            <!-- Janela do Terminal CMD Integrada -->
+            <!-- Janela do Terminal CMD Integrada com botão de fechar -->
             <div id="cmdTerminal" class="cmd-container hidden">
                 <div class="cmd-header">
                     <span class="cmd-title">Sotreq Diagnostic Shell v2.4 - [CAT-797F-01]</span>
